@@ -1,0 +1,48 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=1334
+
+Requires Vim7.
+
+VST is script which makes possible to export text files with simple markup to HTML or LaTeX format or S5 HTML presentation. Script doesn't require any external dependency and will work on any platform Vim7 is available. VST is implementation of reStructuredText.
+
+Supported elements of inline markup:
+
+- emphasised text (italic)
+- strongly emphasised text (bold)
+- hyperlinks (in various syntax forms)
+- custom decorations (among them: sub, sup, big, small)
+
+Elements of documents structure:
+
+- paragraphs
+- block quotes
+- ordered lists
+- unordered lists
+- option lists
+- footnotes
+- citations
+- images
+- preformatted text
+- colorized preformatted text (HTML export only)
+- tables
+- admonitions
+- table of contents
+
+Also bunch of auxiliary commands which should ease writing of document and navigating (folding, text table of contents, lists or declared links, replacements)
+
+Latest version of script:
+http://skawina.eu.org/mikolaj/vst.zip
+
+Help file in text form:
+http://skawina.eu.org/mikolaj/vst.txt
+
+Following versions of help file was produced without any modifications to HTML or LaTeX source:
+
+HTML:
+http://skawina.eu.org/mikolaj/vst.html
+
+LaTeX file exported from vst.txt:
+http://skawina.eu.org/mikolaj/vst.tex
+
+PDF file produced from vst.tex:
+http://skawina.eu.org/mikolaj/vst.pdf
+
