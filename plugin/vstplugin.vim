@@ -2,7 +2,7 @@
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
 " Last Change: 30 Jun 2006
-" Version: 1.0 Finally
+" Version: 1.1 Wedel
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "

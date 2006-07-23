@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 30 Jun 2006
-" Version: 1.0 Finally
+" Last Change: 22 Jul 2006
+" Version: 1.1 Wedel
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "
@@ -37,7 +37,7 @@ scriptencoding iso-8859-2
 " Initiate some variables. Not really necessary but makes possible to use
 " command line completion when doing temporary modifications.
 " VST version (for debugging:
-let s:vst_ver = '100'
+let s:vst_ver = '110'
 " Write export immediately
 if !exists("g:vst_write_export")
 	let g:vst_write_export = 0
@@ -87,6 +87,9 @@ let s:vst_bulletchars = '[\u2022\u2023\u2043\u204c\u204d\u25d8\u25e6\u2619\u2765
 " manually g:vst_write_export variable.
 " Description: Save value of g:vst_write_export var, set it to 1, call
 " VST_Export, and restore old value of variable.
+"    line1  - beginning of range (1st line by default)
+"    line2  - end of range (last line by default)
+"    format - format of export
 function! vst#vst#VST_InstantWrapper(line1, line2, format)
 	let temp_write_export = g:vst_write_export
 	let g:vst_write_export = 1
@@ -99,7 +102,7 @@ endfunction
 " Description: get only real info about headers/section titles, these are
 " bastardized versions of routines from VST_Structure but full scan was too
 " slow, had to cut everything what was not necessary.
-"	 text: text of whole file.
+"	 text: text of whole file in List form
 function! VST_Headers(text)
 
 	let doc = a:text
@@ -417,8 +420,6 @@ function! VST_Structure(text)
 let doc = a:text
 
 	" Initiate arrays and variables {{{
-	" This initialization allows only for one level of restoration. Make it
-	" completely recursive?
 	let ltype = []
 	let lindent = []
 
@@ -1684,7 +1685,7 @@ endwhile
 let i = 0
 while i < len(g:paras)
 	if g:ptype[i] == 'comment'
-		let g:paras[i] = '<vim:comment>'.substitute(g:paras[i], '\s*\.\. comment::', '', '').'</vim:comment>'
+		let g:paras[i] = '<vim:comment>'.substitute(g:paras[i], '^\s*\.\. comment::', '', '').'</vim:comment>'
 	endif
 	let i += 1
 endwhile
@@ -2710,6 +2711,7 @@ function! VST_CreateDBs(table)
 	" Preprocessing here is nice idea for links, they don't have to be changed
 	" physically in document, no messing with adding/removing lines. It slow
 	" things down but more precise processing is Good Thing(tm)
+	"     table: text to analyze in List form
 	let preproc = a:table
 	let i = 0
 	while i < len(preproc)
@@ -2809,6 +2811,7 @@ function! VST_FoldText()
 endfunction
 " }}}
 " VST_ColNumbers: Create <col /> tags for HTML {{{
+"    numbers - values for width of columns, String with + to separate numbers
 function! VST_ColNumbers(numbers)
 	let widths = split(a:numbers, '+')
 	let col_string = ''
@@ -2821,6 +2824,7 @@ endfunction
 
 " Auxiliary functions: {{{
 " Unicode2Char:	  Return char according to hex code {{{
+"    nr - decimal value of Unicode character
 function! Unicode2Char(nr)
 	let n = join(reverse(split(tolower(a:nr), '.\zs')), '')
 
@@ -3129,9 +3133,9 @@ function! VST_EscapingSlash(text)
 	" let par = substitute(par, '\\\\=', '\\=', 'g')
 
 	" Take care about \<Space>
-	let par = substitute(par, '\\\@<!\\ ', '', 'g')
+	let par = substitute(par, '\\\@<!\\ \(-vst-new-line-\)\@!', '', 'g')
 	" And remove escaping \
-	let par = substitute(par, '\\\\ ', '\\ ', 'g')
+	let par = substitute(par, '\\\\ \(-vst-new-line-\)\@!', '\\ ', 'g')
 
 	" Take care about \-
 	let par = substitute(par, '\\\@<!\\-', '\&nbsp;', 'g')
@@ -3577,18 +3581,31 @@ function! VST_Replacement(text)
 			" }}}
 		elseif replace =~ '^replace::'
 			" Plain replace {{{
+			if replace =~ ':ltrim:'
+				let ltrim = '\s*'
+				let rtrim = ''
+			elseif replace =~ ':trim:'
+				let ltrim = '\s*'
+				let rtrim = '\s*'
+			elseif replace =~ ':rtrim:'
+				let ltrim = ''
+				let rtrim = '\s*'
+			else
+				let ltrim = ''
+				let rtrim = ''
+			endif
 			" Process special characters in key: lt, gt, amp
 			" They were already processed in text
 			let key = substitute(key, '&', '\&amp;', 'g')
 			let key = substitute(key, '<', '\&lt;', 'g')
 			let key = substitute(key, '>', '\&gt;', 'g')
-			let replace = matchstr(replace, '^replace::\s*\zs.*')
+			let replace = matchstr(replace, '^replace::\s*\zs.\{-}\ze\_s*\(\.\. \|:trim:\|:ltrim:\|:rtrim:\|$\)')
+			"let replace = matchstr(replace, '^replace::\s*\zs.\{-}\ze\s*$')
 			let replace = escape(VST_SpecCharacter(replace), '&~\')
-			let g:a0 = key
 			if par =~ '|_'
 				" Placeholder necessary to later trigger markup commands
-				let par = substitute(par, '|'.key.'|__', '`{-vst-replace-{'.replace.'}-vst-replace-}`__', 'g')
-				let par = substitute(par, '|'.key.'|_', '`{-vst-replace-{'.replace.'}-vst-replace-}`_', 'g')
+				let par = substitute(par, ltrim.'|'.key.'|__'.rtrim, '`{-vst-replace-{'.replace.'}-vst-replace-}`__', 'g')
+				let par = substitute(par, ltrim.'|'.key.'|_'.rtrim, '`{-vst-replace-{'.replace.'}-vst-replace-}`_', 'g')
 				if has_key(g:hlinkdb, key)
 					" replace can contain markup - in text it will be proceed,
 					" in db no. Force 
@@ -3600,7 +3617,7 @@ function! VST_Replacement(text)
 					let g:hlinkdb[tolower(proceed)] = g:hlinkdb[key]
 				endif
 			endif
-			let par = substitute(par, '|'.key.'|', replace, 'g')
+			let par = substitute(par, ltrim.'|'.key.'|'.rtrim, replace, 'g')
 			" }}}
 		elseif replace =~ '^unicode::'
 			" Unicode {{{
@@ -3868,13 +3885,6 @@ function! VST_Target(text)
 	return par
 endfunction
 " }}}
-" VST_FoldText: Create title of fold {{{
-"function! VST_FoldText()
-"	let text = getline(v:foldstart)
-"	let indent = '+'.v:folddashes
-"	return indent.repeat(' ', 15-len(indent)).text.' '
-"endfunction
-" }}}
 " VST_FoldExpr: Folding expression {{{
 " lnum - current line to evaluate fold level
 function! VST_FoldExpr(lnum)
@@ -3886,12 +3896,26 @@ function! VST_FoldExpr(lnum)
 	endif
 endfunction
 " }}}
-" VST_D(): simple debug {{{
+" VST_D: simple debug {{{
+" Description: echo structure of document in form of list:
+"   <par number>) <par indentation> <par type>
 function! VD()
 	for i in range(len(g:paras))
 		"echo i.') '.g:pindent[i].'  '.g:ptype[i].'  '.split(g:paras[i], "\n")[0]."\n"
 		echo i.') '.g:pindent[i].'  '.g:ptype[i].'  '."\n"
 	endfor
+endfunction
+" }}}
+" VST_End: remove unnecessary global variables and other garbage {{{
+" Description: function unlet! g:vars which may clash in next calls of VST
+" functions
+function! VST_End()
+	unlet! g:paras g:paras_rez
+	unlet! g:pindent g:pindent_rez
+	unlet! g:ptype g:ptype_rez
+	unlet! g:plinen g:plinen_rez
+	unlet! g:vst_recursion
+	unlet! g:vst_doc_title
 endfunction
 " }}}
 " }}}
@@ -3922,78 +3946,86 @@ endfunction
 
 	let text = getline(a:line1, a:line2)
 
-	" Include external files before anything else will be done {{{
-	" if len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. \\(header\\|include\\|footer\\)::"')) > 0
-	" Tried to do in one regexp, but its alternative was sometimes working, sometimes not
-    " Note: it always works... even inside of preformatted text
-	let isinclude = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. include::"'))
-	let isheader = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. header::"'))
-	let isfooter = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. footer::"'))
-	if isinclude > 0 || isheader > 0 || isfooter > 0
-		let i = 0
-		while i < len(text)
-			if text[i] =~ '^\s*\.\. \(header\|include\|footer\)::'
-				let include = matchlist(text[i], '^\(\s*\)\.\. \(header\|include\|footer\)::\s*\(.*\)\s*$')
-				" Do nothing if file isn't readable, general VST policy:
-				" silently ignore all author errors.
-				if include[3] =~ '^<' && include[3] =~ '>$'
-					let include[3] = matchstr(include[3], '^.\zs.*\ze.$')
-					let include[3] = g:vst_included.'/'.include[3]
-				endif
-				let inc_indent = len(include[2])
-				if filereadable(include[3])
-					let included = readfile(include[3])
-					call map(included, 'repeat(" ", inc_indent).v:val')
-					if include[1] == 'header'
-						let text[i] = ''
-						let included += ['']
-						call extend(text, included, 0)
-						let i -= len(included)
-					elseif include[1] == 'footer'
-						let text[i] = ''
-						let included = [''] + included
-						call extend(text, included)
-					else
-						let text[i] = ''
-						call extend(text, included, i+1)
+	let rec_counter = 0
+	while rec_counter < &maxfuncdepth
+		" Include external files before anything else will be done {{{
+		" if len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. \\(header\\|include\\|footer\\)::"')) > 0
+		" Tried to do in one regexp, but its alternative was sometimes working, sometimes not
+		" Note: it always works... even inside of preformatted text
+		let isinclude = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. include::"'))
+		let isheader = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. header::"'))
+		let isfooter = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. footer::"'))
+		if isinclude > 0 || isheader > 0 || isfooter > 0
+			let i = 0
+			while i < len(text)
+				if text[i] =~ '^\s*\.\. \(header\|include\|footer\)::'
+					let include = matchlist(text[i], '^\(\s*\)\.\. \(header\|include\|footer\)::\s*\(.*\)\s*$')
+					" Do nothing if file isn't readable, general VST policy:
+					" silently ignore all author errors.
+					
+					if include[3] =~ '^<' && include[3] =~ '>$'
+						let include[3] = matchstr(include[3], '^.\zs.*\ze.$')
+						let include[3] = g:vst_included.'/'.include[3]
 					endif
-				elseif include[3] == 'vstfooter' || include[3] == ''
-					if exists("*strftime")
-						let date = strftime("%c")
-					else
-						let date = "Unknown"
-					endif
-					let included = ['.. block:: vstfooter', '', '   -----------------------',
-						\ '', '   Vim reStructured Text document. Generated: '.date
-						\.'. `View VST source`_', '', 
-						\ '   .. _view VST source: '.expand("%"),'']
-					call extend(text, included)
-					let text[i] = ''
-				elseif include[2] =~ 'header\|footer' && text[i-2] !~ '::\s*$'
-					" Second part of above condition is hack to allow for
-					" proper compilation of f/h examples. Simple test should
-					" cover most of them.
-					if include[2] == 'footer'
-						let text[i] = ''
-						if format !~ 's5'
-							let included = ['.. block:: vstfooter','', '   ------------------------',
-								\ '', '   '.include[3], '']
+					let inc_indent = len(include[1])
+					if filereadable(include[3])
+						let included = readfile(include[3])
+						call map(included, 'repeat(" ", inc_indent).v:val')
+						if include[1] == 'header'
+							let text[i] = ''
+							let included += ['']
+							call extend(text, included, 0)
+						elseif include[1] == 'footer'
+							let text[i] = ''
+							let included = [''] + included
 							call extend(text, included)
 						else
-							let s5footer = include[3]
+							let text[i] = ''
+							call extend(text, included, i+1)
 						endif
-					elseif include[2] == 'header'
+					elseif include[3] == 'vstfooter' || include[3] == ''
+						if exists("*strftime")
+							let date = strftime("%c")
+						else
+							let date = "Unknown"
+						endif
+						let included = ['.. block:: vstfooter', '', '   -----------------------',
+							\ '', '   Vim reStructured Text document. Generated: '.date
+							\.'. `View VST source`_', '', 
+							\ '   .. _view VST source: '.expand("%"),'']
+						call extend(text, included)
 						let text[i] = ''
-						let included = ['.. block:: vstfooter','', '   '.include[3],
-							\ '', '   ------------------------', '']
-						call extend(text, included, 0)
-						let i -= len(included)
+					elseif include[2] =~ 'header\|footer' && text[i-2] !~ '::\s*$'
+						" Second part of above condition is hack to allow for
+						" proper compilation of f/h examples. Simple test should
+						" cover most of them.
+						if include[2] == 'footer'
+							let text[i] = ''
+							if format !~ 's5'
+								let included = ['.. block:: vstfooter','', '   ------------------------',
+									\ '', '   '.include[3], '']
+								call extend(text, included)
+							else
+								let s5footer = include[3]
+							endif
+						elseif include[2] == 'header'
+							let text[i] = ''
+							let included = ['.. block:: vstfooter','', '   '.include[3],
+								\ '', '   ------------------------', '']
+							call extend(text, included, 0)
+						endif
+					endif
+					if exists('included')
+						let i += len(included)
 					endif
 				endif
-			endif
-			let i += 1
-		endwhile
-	endif
+				let i += 1
+			endwhile
+		endif
+		let rec_counter += 1
+	endwhile
+	let g:a0 = rec_counter
+	unlet! rec_counter
 	" }}}
 	" Preprocess text to ... 	{{{
 	" But not for preproc export:
@@ -4656,7 +4688,7 @@ endfunction
 			exe 'silent! source '.escape(g:vst_html_post, ' \#%')
 		endif
 		silent call cursor(1,1)
-		unlet! g:vst_doc_title
+		call VST_End()
 		" }}}
 	elseif format == 'xml'
 		" XML export {{{
@@ -4667,19 +4699,20 @@ endfunction
 			silent exe 'write! '.escape(filename, ' \#%').'.xml'
 		endif
 		silent call cursor(1,1)
+		call VST_End()
 		" }}}
 	elseif format =~? '^re\?st$'
 		" reST export {{{
-		let rez_a = @a
-		normal! gg"ayG
+		let rest_file = getline(1, '$')
+		" Potential problems when size of register has limits. :help 'viminfo'
 		new
-		silent 0put a
-		let @a = rez_a
-		unlet! rez_a
+		silent! 0put =rest_file
+		unlet! rest_file
 		silent! %s/\(^\s*\.\. \)block::/\1admonition::/ge
 		silent! g/^\s*:identify:/d
 		silent! %s/\(^\s*\)\(:\S.\{-}  \)/\1--VIM, \2/ge
-		silent! %s/\\\@<!\\-/ /ge
+		" <c-v>160 - non breaking space
+		silent! %s/\\\@<!\\-/ /ge
 		silent! %s/\(^\s*\)\.\. 2html::.*/\1::
 		silent call cursor(1,1)
 		" }}}
@@ -5383,7 +5416,7 @@ endfunction
 
 		" Handling of pdf export {{{
 		if format =~ 'pdf'
-			silent call(1,1)
+			silent call cursor(1,1)
 			let file_tex = filename.'.tex'
 			if !exists('g:vst_pdf_command')
 				let g:vst_pdf_command = 'pdflatex -interaction=nonstopmode'
@@ -5407,18 +5440,23 @@ endfunction
 						if has("win32")
 							let g:vst_pdf_viewer = ""
 						elseif has("unix") 
-							if executable("xpdf")
-								let g:vst_pdf_viewer = "xpdf"
-							elseif executable("kpdf")
+							if executable("kpdf")
 								let g:vst_pdf_viewer = "kpdf"
+							elseif executable("xpdf")
+								let g:vst_pdf_viewer = "xpdf"
+							else
+								let g:vst_pdf_viewer = "no_pdf_viewer"
 							endif
 						endif
 					endif
 					silent exe "call system(\"".g:vst_pdf_viewer." '".filename.".pdf'\")"
+					silent redraw!
 				endif
 			else
 				echomsg "Something went wrong, check TeX code or command settings."
 			endif
+			silent call cursor(1,1)
+			call VST_End()
 			return
 		endif
 		" }}}
@@ -5431,7 +5469,7 @@ endfunction
 		endif
 
 		silent call cursor(1,1)
-		unlet! g:vst_doc_title
+		call VST_End()
 		" }}}
 	" Auxiliary commands {{{
 	elseif format =~ '^head'

@@ -4,9 +4,9 @@ Vim reStructured Text
 :Author: Mikolaj Machowski
 :Title: Vim reStructured Text - HTML and LaTeX output
 :Keywords: Vim, LaTeX, PDF, HTML, XML
-:Version: 1.0
+:Version: 1.1 Wedel
 :License: GPL v. 2
-:Date: 30 Jun 2006
+:Date: 22 Jul 2006
 
 For a long time Vim_ users were asking for "real" export to HTML.  This is,
 I believe, first real try to achieve this effect.  This is Vim version of
@@ -153,7 +153,7 @@ Command::
 
     :Vst s5
 
-Will create S5_ - Simple Standards Based Slide Show System. XHTML file steered
+Will create S5_ -- Simple Standards Based Slide Show System. XHTML file steered
 by JavaScript and CSS created by Eric Meyer.
 
 .. _S5: http://meyerweb.com/eric/tools/s5
@@ -182,7 +182,7 @@ container_ directives:
 
 ``incremental``
     Elements marked with that class will be displayed gradually, when using
-    normal forward. This one can be also introduced as a role - usage of this
+    normal forward. This one can be also introduced as a role -- usage of this
     element is easier with `default role`_ directive.
     
 Good example of S5 document was prepared by George V. Reilly and its text
@@ -237,11 +237,11 @@ Additional tuning of this command with variables (how to use variables read
 
 ``g:vst_pdf_viewer``
     String (default for unices is ``xpdf``, for MS-Windows empty
-    - properly setup system will take care about choosing application).
+    -- properly setup system will take care about choosing application).
 
 ``g:vst_pdf_clean``
     Boolean (0). When equal 1 remove auxiliary files of PDF compilation
-    (including tex source - use with caution!)
+    (including tex source -- use with caution!)
 
 ``g:vst_pdf_command``
     String (``pdflatex -interaction=nonstopmode``). Value of this string will
@@ -264,8 +264,8 @@ This command will remove incompatibilities with reST::
 
     :Vst rest
 
-- identify option of Images_ and figures_ will be deleted
-- figalign option of Figures_ will be deleted
+- identify option of images_ and figures_ will be deleted
+- figalign option of figures_ will be deleted
 - in Vim commands of `option list`_ leading colon will be replaced with
   ``--VIM, :``
 - replace non-breaking space with plain space
@@ -299,7 +299,7 @@ Will show small table with level name and symbols used to mark them::
     h4                  +++++++++ 
  
 This is result of ``Vst head`` for this manual. Letter ``d`` at the end of
-ornament shows this is double ornament
+ornament shows this is double ornament.
 
 
 .. _contents:
@@ -324,9 +324,9 @@ is fragment of table of contents of this manual::
 
 It gives plenty of information. First column is name of section level; second
 column shows decoration for that level; third column are section titles with
-indenting to show structure of text - title of section were cursor was at the
+indenting to show structure of text -- title of section were cursor was at the
 moment of invoking command is taken into ``[[[ ]]]``; fourth column are line
-numbers of section titles - user can immediately issue Vim command ``:899`` to
+numbers of section titles -- user can immediately issue Vim command ``:899`` to
 go to Images section.
 
 ``link`` and ``slink``
@@ -396,13 +396,14 @@ For easier finding of some directives user can use special case of folding::
 
 Where ``{directive}`` can be name of one of directives: container, blockquote,
 image, figure, tip, note, sidebar, compound, warning, admonition, topic, table
-(not supported by |VST| at the moment but may be useful for reST users).
+(not supported by |VST| at the moment but may be useful for reST users), etc.
+Directive name is case insensitive.
 
 Special case is::
 
     :Vst fblank
 
-Document will be folded by paragraphs, that is chunks of code separated by
+Document will be folded by paragraphs -- fragments of text separated by
 blank lines.
 
 ``help``
@@ -420,9 +421,7 @@ This command will preprocess file and include in file all including commands::
     :Vst preproc
 
 .. Note:: Processed works for only one level. If included files are containing
-   `including commands`_ they will not be processed. This apply also for
-   processing of file during regular export. This command is especially useful
-   for solving of nested includes.
+   `including commands`_ they will not be processed.
 
 Vim settings
 ~~~~~~~~~~~~
@@ -494,7 +493,7 @@ Paragraphs
 Base unit of text is **paragraph**, text separated by at least one blank
 line.  All lines in paragraphs must have the same indentation. Paragraph
 indented will be displayed as quotation (blockquote). It is possible to
-embed any type and any number of elements inside blockquote - respecting
+embed any type and any number of elements inside blockquote -- respecting
 their own rules of embedding. Example::
 
     This is example of paragraph. This
@@ -527,8 +526,8 @@ Text styles
 ~~~~~~~~~~~
 
 Inside of paragraph (and other text elements you can use another markup
-- *italics* with "``*italics*``",  **bold** with "``**bold**``",
-"````double back-quotes````" for typewriter text.
+-- *italics* with ``*italics*``,  **bold** with ``**bold**``,
+````double back-quotes```` for ``typewriter text``.
 
 This text is *italicised*.
 
@@ -537,12 +536,12 @@ This text is **strongly emphasised**.
 This text is ``a code``.
 
 If you find that you want to use one of the "special" characters in
-text, it should be OK - |VST| can deal with most typical situations.
+text, it should be OK -- |VST| can deal with most typical situations.
 For example, this * asterisk is handled just fine.  If you actually
 want text \*surrounded by asterisks* to **not** be italicised, then
 you need to indicate that the asterisk is not special.  You do this by
 placing a backslash just before it, like so "``\\*``". Remember: special
-treatment of these few characters is entering inline literals - even
+treatment of these few characters is entering inline literals -- even
 there you have to escape it with double backslash::
 
     ``\\*``
@@ -927,7 +926,7 @@ Bulleted lists
 ``````````````
 
 Just like enumerated lists, start the line off with a bullet point
-character - either "-", "+" or "*"::
+character -- either "-", "+" or "*"::
 
     * a bullet using "*"
 
@@ -1099,7 +1098,7 @@ options::
     -a, --all-name      Combined listing of option
     +option             Old style options
     /VMS                VMS and DOS style options
-    :Vim command        And Vim command - not available in reST
+    :Vim command        And Vim command -- not available in reST
     --multi-struct      It is possible to use structure elements in
                         option lists::
 
@@ -1121,7 +1120,7 @@ spaces. Above example results in:
 -a, --all-name     Combined listing of option
 +option            Old style options
 /VMS               VMS and DOS style options
-:Vim command       And Vim command - not available in reST
+:Vim command       And Vim command -- not available in reST
 --multi-struct     It is possible to use structure elements in
                    option lists::
 
@@ -1856,7 +1855,7 @@ on standard settings.
 
     ``:identify:``
         Calls ``identify`` program from ImageMagick_ suite to identify
-        dimensions of image. Possible use of argument - number will be value
+        dimensions of image. Possible use of argument -- number will be value
         hot to scale image. When containing non digit chars, ignored.
         Example::
             
@@ -1947,7 +1946,7 @@ It is possible to make image a link with option ``:target:``::
 
 It will make image a link to other image. When you are scaling image
 view it is a good idea to make it clickable and point to full scale
-version - possible with special argument ``self`` (note limited
+version -- possible with special argument ``self`` (note limited
 usability in LaTeX export)::
 
     .. image:: test.png
@@ -1997,7 +1996,7 @@ on standard settings.
 
     ``:identify:``
         Calls ``identify`` program from ImageMagick_ suite to identify
-        dimensions of image. Possible use of argument - number will be value
+        dimensions of image. Possible use of argument -- number will be value
         hot to scale image. When containing non digit chars, ignored.
         Example::
             
@@ -2077,7 +2076,7 @@ body elements. Example::
     ``:class:``
         Name of class applied to the topic. Only in HTML export.
 
-        One class is predefined - sidebar::
+        One class is predefined -- sidebar::
 
             .. topic:: Notes on margin
                :class: sidebar
@@ -2167,7 +2166,7 @@ This is an exception from general format of directive::
     .. |from| replace:: into
 
 It consists of four parts: leading commas; source part enclosed in
-bars; name of directive - ``replace::``; and the rest of line which will
+bars; name of directive -- ``replace::``; and the rest of line which will
 replace source in file (without leading space). Beware: ``from`` and ``into``
 elements are processed through ``substitute()`` Vim function and have to be
 proper Vim regexps. Three characters will be escaped automatically: ``\ & ~``.
@@ -2253,7 +2252,7 @@ With bigger sets of documents some parts can be repeated. In such case it is
 good idea to put them in external file and only include it in proper place.
 Also it gives profits when making changes. User have to only make correction
 in one file, not in whole collection. |VST| provides three directives. All are
-making the same thing - include text file - written in VST before any other
+making the same thing -- include text file -- written in VST before any other
 activity.
 
 1. This command will include file in given place::
@@ -2300,8 +2299,8 @@ activity.
 - **Options**: NONE
 - **Content**: NONE
 
-.. Note:: If included files have including directives, they will *not* be
-   interpreted in the same run.
+.. Note:: To avoid endless loops level of recursiveness is equal to Vim's
+   option 'maxfuncdepth' (default: 100).
 
 .. _reST substitutes:
    http://docutils.sf.net/docs/ref/rst/substitutions.html#character-entity-sets
@@ -2405,7 +2404,8 @@ General form of multi element message directive (MEMD). Have form::
         describes look of admonition. By default ``note``, available three
         classes: ``note``, ``tip``, ``warning``.
 
-- **Content**: Interpreted as body elements.
+- **Content**: Interpreted as body elements. MUST be separated from header by
+  blank line.
 
 Directive can be used as i18n version of any other MEMD.
 
@@ -2575,7 +2575,7 @@ concepts. You can use then raw LaTeX directive::
 - **Content**: one indented paragraph of LaTeX source
 
 Content of this directive will not be visible in HTML export and in LaTeX
-literally. This directive must be a one paragraph of |VST| - without blank
+literally. This directive must be a one paragraph of |VST| -- without blank
 lines. But you can make it multi paragraph LaTeX content with ``\par``
 command::
 
@@ -2600,7 +2600,7 @@ Results in:
             good for visual separation of \texttt{paragraphs}.
 
 Content of this directive (and above example) will not be visible in HTML
-export. This directive must be a one paragraph of |VST| - without blank lines. 
+export. This directive must be a one paragraph of |VST| -- without blank lines. 
 
 Raw latex replaces ``latexonly`` directive which is considered deprecated.
 
@@ -2637,7 +2637,7 @@ Results in:
       CO<sub>2</sub>
 
 Content of this directive (and above example) will not be visible in LaTeX
-export. This directive must be a one paragraph of |VST| - without blank lines. 
+export. This directive must be a one paragraph of |VST| -- without blank lines. 
 
 Raw html replaces ``htmlonly`` directive which is considered deprecated.
 
@@ -2672,7 +2672,7 @@ bigger indentation.
         Argument will set proper highlighting for the following fragment of
         code (usually those snippets will be too short for automatic
         recognition). May be omitted, following paragraphs will be treated
-        as normal code snippets - without coloring. Obligatory if you want
+        as normal code snippets -- without coloring. Obligatory if you want
         to declare ``colorscheme``.
 
     ``colorscheme``
@@ -2687,7 +2687,7 @@ bigger indentation.
 
 .. Tip:: Not all colorschemes look good when exported to HTML. It is wise idea
    to check result before official presentation. Especially ``default`` is
-   hard to read on white background - and this is default combination when
+   hard to read on white background -- and this is default combination when
    doing export from non-GUI version of Vim. It is a good idea to set
    ``g:colors_name`` somewhere because it will be used in such case. When you
    try to export this document on your system check example below with manxome
@@ -2732,7 +2732,7 @@ The same fragment in manxome:
         endif
     endif
 
-And fragment of Vim itself - ex_cmds.c by murphy. Declaration::
+And fragment of Vim itself -- ex_cmds.c by murphy. Declaration::
 
     .. 2html:: c murphy
 
@@ -2776,7 +2776,7 @@ is added ``myhtmlvst.vim`` file with examples of two macros:
    call it later. Thus it can become {readperl}, {readruby}, {readbash}, etc.
    Program name has to match ``\w\+`` regexp.
    
-   ``readbang`` has special value - it will execute shell command.
+   ``readbang`` has special value -- it will execute shell command.
    
    .. Warning:: This macro can have serious security consequences!!!
 
@@ -2813,7 +2813,7 @@ FAQ
 - **Will VST support all reST features?** Rather not. It is too big project
   and develop too fast to catch up. All major features at the moment (1 Dec
   2005) were implemented, minor features are covered to satisfy most users
-  IMO - you can compare differences in `compatibility table`_.
+  IMO -- you can compare differences in `compatibility table`_.
   
   .. _compatibility table: http://skawina.eu.org/mikolaj/restdiff.html
 
@@ -2857,7 +2857,7 @@ FAQ
 
     1. No dependency on external tools. Unpack .zip archive and everything is ready.
     2. reST is hard to install. I tried several times on Linux to set it up
-       properly - $PATH and everything. Failed each time. Don't want even
+       properly -- $PATH and everything. Failed each time. Don't want even
        think how to install it on MS-Windows. Plus installation of Python
        itself.
     3. 2html_ directive. Whole power of Vim syntax and colorscheme files on
@@ -2878,7 +2878,7 @@ ChangeLog
 :ADD: new feature
 :CHG: change of behaviour
 :RMV: remove feature
-:LaTeX/HTML/etc: apply to export, without that tag - global
+:LaTeX/HTML/etc: apply to export, without that tag -- global
 
 Full ChangeLog is here: `vst-changelog`_.
 
@@ -2886,20 +2886,14 @@ Full ChangeLog is here: `vst-changelog`_.
 
 Changes from last announcement:
 
-- 12 Mar 2006 - **1.0-beta22** announcement
+- 1 Jul 2006 - **1.0** announcement
   
-  - ADD: S5 document by George V. Reilly to show how it should be done
-  - ADD: UTF-8 BULLET characters (without math symbols) are recognized as
-    unordered lists bullets
-  - ADD: support for "stacked" links_
-  - ADD: [LaTeX] support for `custom roles`_
-  - ADD: support for non-breaking space character
-  - FIX: mangled URLs with excessive underscores
-  - FIX: use 'fileencoding' when exists instead of 'encoding'
-  - FIX: start processing only when format was properly declared
-  - FIX: fix :Vst rep auxiliary command
-  - FIX: show first line of paragraphs when folding by paragraph
-  - FIX: various fixes
+  - ADD: support for ltrim, rtrim, trim for regular replacement
+  - CHG: `including commands`_ are working recursively now
+  - FIX: wrong indentation of included files
+  - FIX: problems with backslash as last character in line
+  - FIX: minor fixes in docs
+  - FIX: [pdf] incorrect call of cursor function
   
 - REMEMBER ABOUT UPDATING DOCS
 
@@ -2918,7 +2912,7 @@ reST compatibility things are in `compatibility table`_ with (td) note.
 - show worded reference as label
 - multiple <style> tags in document (2html)
 - (doc) Quick start table
-- add possibility of images to MEMD - source of images - Vim???
+- add possibility of images to MEMD -- source of images -- Vim???
 - in VST_IdMaker full percentage encryption or - simplification
 - start description of option in next line if option name too long
 
