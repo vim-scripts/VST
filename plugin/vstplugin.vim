@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 30 Jun 2006
-" Version: 1.1 Wedel
+" Last Change: 13 Oct 2006
+" Version: 1.2
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "
@@ -62,3 +62,7 @@ if exists("g:vst_showmenu") && g:vst_load_menus != 0
 	call VST_Menus()
 endif
 " }}}
+" Load auxiliary mappings:
+call vst#vst#VST_AuxiliaryMappings()
+
+" vim:fdm=marker:ff=unix:noet:ts=4:sw=4:nowrap

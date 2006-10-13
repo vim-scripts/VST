@@ -4,9 +4,9 @@ Vim reStructured Text
 :Author: Mikolaj Machowski
 :Title: Vim reStructured Text - HTML and LaTeX output
 :Keywords: Vim, LaTeX, PDF, HTML, XML
-:Version: 1.1 Wedel
+:Version: 1.2
 :License: GPL v. 2
-:Date: 22 Jul 2006
+:Date: 13 Oct 2006
 
 For a long time Vim_ users were asking for "real" export to HTML.  This is,
 I believe, first real try to achieve this effect.  This is Vim version of
@@ -314,20 +314,19 @@ In longer text documents it is very easy to be lost::
 This command will present table of contents for current document. Here
 is fragment of table of contents of this manual::
 
-    h4 ``````````        Internal links                    719
-    h4 ``````````        Standalone links                  749
-    h3 ~~~~~~~~~~      Transitions                         765
-    h3 ~~~~~~~~~~      [[[ Tables ]]]                      789
-    h2 ----------    Directives                            888
-    h3 ~~~~~~~~~~      Images                              899
-    h3 ~~~~~~~~~~      Comments                            970
+    h3 ~~~~~~~~~   5.3  Inline markup rules                553
+    h3 ~~~~~~~~~   5.4  Special characters                 587
+    h3 ~~~~~~~~~   [[[ 5.5  Roles ]]]                      625
+    h4 `````````   5.5.1  Predefined roles                 652
+    h5 '''''''''   5.5.1.1  Title reference                658
+    h5 '''''''''   5.5.1.2  Subscript                      670
 
 It gives plenty of information. First column is name of section level; second
 column shows decoration for that level; third column are section titles with
-indenting to show structure of text -- title of section were cursor was at the
-moment of invoking command is taken into ``[[[ ]]]``; fourth column are line
-numbers of section titles -- user can immediately issue Vim command ``:899`` to
-go to Images section.
+numbers of sections as they will be shown in HTML and LaTeX export.  Title of
+section were cursor was at the moment of invoking command is taken into 
+``[[[ ]]]``; fourth column are line numbers of section titles -- user can
+immediately issue Vim command, eg.  ``:625`` to go to Roles section.
 
 ``link`` and ``slink``
 ``````````````````````
@@ -381,11 +380,13 @@ This command will create fold for |VST| document::
 
     :Vst fold
 
-Note however they are created basing on line numbers and position of
-section titles in time of issuing of command. It means after changes of
-text folds will not represent real structure of document. Necessary is
-recreating of folds from time to time. Unfortunately in bigger documents
-(like this one) it is time consuming and can take up to 2 seconds.
+Folds are created based on regular expressions and when you add new text to
+section fold will be expanded to include them. New sections won't be
+recognized automatically and you should recreate folds to include new
+sections.
+
+In front of header text you will see numbers of section as they will be
+visible in HTML and LaTeX formats.
 
 Folding by directive
 ````````````````````
@@ -422,6 +423,24 @@ This command will preprocess file and include in file all including commands::
 
 .. Note:: Processed works for only one level. If included files are containing
    `including commands`_ they will not be processed.
+
+Ornament mapping
+````````````````
+
+Manual insertion of sections_ or transitions_ ornaments is boring. To speed
+things up in Vim way auxiliary mapping was created: <C-B>o.
+
+When placed below line of text and above empty one it will fill line to length
+of line above. It may use character before cursor, when not available it will
+use last single ornamented section title as hint.
+
+When placed above line of text and below empty line it will embrace line below
+in section ornaments. It may use character before cursor, when not available it
+will use last double ornamented section title as hint.
+
+When placed between empty lines it will fill it as transition element. It may
+use character before cursor, when not available it will use last transition as
+hint.
 
 Vim settings
 ~~~~~~~~~~~~
@@ -1108,7 +1127,7 @@ options::
                         2. uses
                         3. Or any other structure element.
 
-   --in-case-of-very-lon-option
+   --in-case-of-very-long-option
                         definition may begin in next line, no trailing space
                         after option name allowed.
 
@@ -1130,7 +1149,7 @@ spaces. Above example results in:
                    2. uses
                    3. Or any other structure element.
 
---in-case-of-very-lon-option
+--in-case-of-very-long-option
                     definition may begin in next line, no trailing space
                     after option name allowed.
 
@@ -1856,8 +1875,8 @@ on standard settings.
     ``:identify:``
         Calls ``identify`` program from ImageMagick_ suite to identify
         dimensions of image. Possible use of argument -- number will be value
-        hot to scale image. When containing non digit chars, ignored.
-        Example::
+        how to scale image in percents. When containing non digit chars,
+        ignored. Example::
             
             :identify: 50
 
@@ -1885,7 +1904,7 @@ on standard settings.
         Makes image a link. Argument is a path to location. Special argument
         ``self`` points to image itself. Examples::
 
-            :target: path/to/document.html
+            :target: URL
             :target: start_
             :target: self
 
@@ -2026,7 +2045,7 @@ on standard settings.
         Makes image a link. Argument is a path to location. Special argument
         ``self`` points to image itself. Examples::
 
-            :target: path/to/document.html
+            :target: URL
             :target: start_
             :target: self
 
@@ -2560,6 +2579,7 @@ HTML and pure text are often not enough to present some mathematical
 concepts. You can use then raw LaTeX directive::
 
     .. raw:: latex
+    .. raw:: tex
 
 - **Argument**: name of export: html, latex (case sensitive)
 - **Options**: 
@@ -2628,13 +2648,13 @@ Raw html
 
     .. raw:: html
     
-          CO<sub>2</sub>
+          <p>CO<sub>2</sub></p>
 
 Results in:
 
 .. raw:: html
 
-      CO<sub>2</sub>
+      <p>CO<sub>2</sub></p>
 
 Content of this directive (and above example) will not be visible in LaTeX
 export. This directive must be a one paragraph of |VST| -- without blank lines. 
@@ -2886,20 +2906,25 @@ Full ChangeLog is here: `vst-changelog`_.
 
 Changes from last announcement:
 
-- 1 Jul 2006 - **1.0** announcement
+- 23 Jul 2006 - **1.1** announcement
   
-  - ADD: support for ltrim, rtrim, trim for regular replacement
-  - CHG: `including commands`_ are working recursively now
-  - FIX: wrong indentation of included files
-  - FIX: problems with backslash as last character in line
-  - FIX: minor fixes in docs
-  - FIX: [pdf] incorrect call of cursor function
+  - ADD: <C-B>o auxiliary mapping for ornaments
+  - ADD: section numbers in fold auxiliary command
+  - ADD: section numbers in toc auxiliary command
+  - ADD: [LaTeX] raw directive accepts tex, not only latex argument
+  - CHG: don't look for including commands in auxiliary commands - massive
+    speed gains
+  - CHG: [LaTeX] change default font size for 12pt
+  - FIX: [HTML] all styles from multiple 2html directives are in <head>
+  - FIX: [HTML] @ in 2html directive was breaking syntax highlighting
+  - FIX: [HTML] restore validity of generated documents
+  - FIX: [LaTeX] bug with _ in filenames in raw latex file option
+  - FIX: many minor bugs
   
 - REMEMBER ABOUT UPDATING DOCS
 
 TODO
 ----
-
 
 There is no roadmap for these things, they are just loose thoughts what
 can be done in the future.
@@ -2907,14 +2932,13 @@ can be done in the future.
 reST compatibility things are in `compatibility table`_ with (td) note.
 
 - container as ghost environment in LaTeX export? (as custom roles)
-- section numbers in folds/toc
+- section numbers in toc
 - image inside of admonition in LaTeX export
 - show worded reference as label
-- multiple <style> tags in document (2html)
 - (doc) Quick start table
-- add possibility of images to MEMD -- source of images -- Vim???
 - in VST_IdMaker full percentage encryption or - simplification
 - start description of option in next line if option name too long
+- fix _top in CSS (IE...)
 
 + REMEMBER ABOUT UPDATING DOCS
 

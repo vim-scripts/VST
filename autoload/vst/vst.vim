@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 22 Jul 2006
-" Version: 1.1 Wedel
+" Last Change: 13 Oct 2006
+" Version: 1.2
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "
@@ -37,7 +37,7 @@ scriptencoding iso-8859-2
 " Initiate some variables. Not really necessary but makes possible to use
 " command line completion when doing temporary modifications.
 " VST version (for debugging:
-let s:vst_ver = '110'
+let s:vst_ver = '120'
 " Write export immediately
 if !exists("g:vst_write_export")
 	let g:vst_write_export = 0
@@ -505,13 +505,13 @@ let doc = a:text
 			let ltype += ['MED-compound']
 		elseif doc[line] =~ '^\s*\.\. class::'
 			let ltype += ['MED-class']
-		elseif doc[line] =~ '^\s*\.\. raw::\s*latex\s*html'
+		elseif doc[line] =~ '^\s*\.\. raw::\s*\(la\)\?tex\s\+html'
 			let ltype += ['rawboth']
-		elseif doc[line] =~ '^\s*\.\. raw::\s*html\s*latex'
+		elseif doc[line] =~ '^\s*\.\. raw::\s*html\s\+\(la\)\?tex'
 			let ltype += ['rawboth']
-		elseif doc[line] =~ '^\s*\.\. raw:: latex'
+		elseif doc[line] =~ '^\s*\.\. raw::\s*\(la\)\?tex'
 			let ltype += ['rawlatex']
-		elseif doc[line] =~ '^\s*\.\. raw:: html'
+		elseif doc[line] =~ '^\s*\.\. raw::\s*html'
 			let ltype += ['rawhtml']
 		elseif doc[line] =~ '^\s*\.\. role::'
 			let ltype += ['role']
@@ -1023,7 +1023,7 @@ let doc = a:text
 					let parline = substitute(parline, '^\s*', '', '')
 					if src == ''
 						let src = matchstr(parline, '\.\. figure::\s*\zs.\{-}\ze\s*$')
-						if !filereadable(src)
+						if !filereadable(escape(src, ' \%#'))
 							let noimage = 1
 							let g:vst_error .= "No image: ".src."\n"
 						else
@@ -1890,7 +1890,7 @@ while i < len(g:paras)
 	if g:ptype[i] == 'intlink'
 		let title = tolower(matchstr(g:paras[i], '^\s*\.\. _\zs.\{-}\ze:'))
 		let title = VST_IdMaker(title)
-		let g:paras[i] = "\n".'<vim:span id="l'.title.'"></vim:span>'."\n"
+		let g:paras[i] = "\n".'<vim:p id="l'.title.'"></vim:p>'."\n"
 	endif
 	let i += 1
 endwhile
@@ -1915,9 +1915,9 @@ while i < len(g:paras)
 		endif
 		if matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)') != ''
 			" Alternative title of toc
-			let toc = '<vim:span id="tocheader" class="'.tocclass.'">'.matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)')."<\/vim:span>\n"
+			let toc = '<vim:p id="tocheader" class="'.tocclass.'">'.matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)')."<\/vim:p>\n"
 		else
-			let toc = "<vim:span id=\"tocheader\" class=\"".tocclass."\">Contents<\/vim:span>\n"
+			let toc = "<vim:p id=\"tocheader\" class=\"".tocclass."\">Contents<\/vim:p>\n"
 		endif
 		let toc .= "<vim:ul class=\"".tocclass."\">\n"
 		let j = 0
@@ -2458,7 +2458,7 @@ while i < len(g:paras)
 	if g:ptype[i] =~ '^raw\(latex\|html\|both\)$'
 		if g:paras[i] =~ ':file:'
 			let file = matchstr(g:paras[i], ':file:\s*\zs.*')
-			let g:paras[i] = '-vst-raw-file-placeholder:'.file
+			let g:paras[i] = '-vst-raw-file-placeholder:'.VST_ProtectLiteral(file)
 		else
 			let g:paras[i] = ''
 		endif
@@ -2680,7 +2680,6 @@ function! VST_TocTable(list, fcol, scol, tcol, sinfo)
 	let table = a:fcol.repeat(' ', secmargin-len(a:fcol))
 		\ .a:scol.repeat(' ',thdmargin-len(a:scol)).a:tcol."\n"
 
-
 	let i = 0
 	while i < len(a:list)
 		let [level, title, line] = a:list[i]
@@ -2691,10 +2690,10 @@ function! VST_TocTable(list, fcol, scol, tcol, sinfo)
 		else
 			let nextsection = a:list[i+1][2]
 		endif
+		let title = b:vst_toc_numbers[title].title
 		if a:sinfo >= line && a:sinfo < nextsection
 			let title = '[[[ '.title.' ]]]'
 		endif
-		let title = repeat('  ', matchstr(level, '.$')-1).title
 		let table .= level.' '.g:vst_headers[level].' '
 			\ .repeat(' ', secmargin-len(level.g:vst_headers[level].'  '))
 			\ .title.repeat(' ', thdmargin-len(title)).line."\n"
@@ -2804,7 +2803,7 @@ function! VST_FoldText()
 	let length = v:foldend - v:foldstart
 	let indent = '+'.v:folddashes.repeat(' ', 5-len(length)).length
 		\ .' lines: '
-	let line = repeat(' ', 2*b:fold[text]).text
+	let line = b:vst_fold_numbers[text].text
 	let symbol = repeat(' ', 50-len(line)).'('
 		\ .matchstr(getline(v:foldstart+1), '^\s*\zs...\ze').')'
 	return indent.repeat(' ', 15-len(indent)).line.symbol.' '
@@ -2870,7 +2869,9 @@ function! VST_2html()
 	" Backup of important elements
 	let bufnumber = bufnr('%')
 	let z_rez = @z
+	let y_rez = @y
 	let @z = ''
+	let @y = ''
 	if exists('g:colors_name')
 		let col_scheme = g:colors_name
 	else
@@ -2915,6 +2916,7 @@ function! VST_2html()
 
 	while search('<pre class="tohtml-[^"]\+">', 'W')
 		let @z = ''
+		let @y = ''
 		let line = line('.')
 		" Retrieve filetype and colorscheme data
 		let data = matchstr(getline('.'), '<pre class="tohtml-\zs.\{-}\ze">')
@@ -2944,10 +2946,12 @@ function! VST_2html()
 		%s/&lt;/</ge
 		%s/&gt;/>/ge
 		%s/&amp;/\&/ge
+		" @-entity was treated literally by 2html.vim
+		%s/&#64;/@/ge
 		silent runtime syntax/2html.vim
 		" Remove html headers, I don't need them inside of file
 		" Still problem with style inside of body
-		silent g+<!DOCTYPE\|</\?html\|</\?head>\|</\?pre>\|</\?body>\|<title>\|<meta +d
+		silent g+<!DOCTYPE\|</\?html\|</\?head>\|</\?pre>\|</\?body>\|</\?p>\|<title>\|<meta +d
 		silent g+<?xml+d
 		if exists('cscheme')
 			silent exe 'g+^body+s+^body+.tohtml-'.filetype.'----'.cscheme.'+e'
@@ -2957,26 +2961,44 @@ function! VST_2html()
 		" 2html.vim in full auto _always_ use html_no_pre = 1. Weird.
 		silent %s/&#x20;/ /ge
 		silent %s/<br\/>//ge
-		silent normal! gg"zyG
+		" Restore @ -> &#64; to prevent mail harvesting
+		silent %s/@/\&#64;/ge
+		silent call cursor(1,1)
+		silent /<style/,/<\/style/yank y
+		let style = split(@y, '\n')
+		let main_style = style[-3:-3]
+		let main_style_name = split(main_style[0], ' ')[0]
+		let style = style[2:-4]
+		silent call map(style, "main_style_name.' '.v:val")
+		let style = main_style + style
+		if exists('g:vst_2html_css')
+			let g:vst_2html_css += style
+		else
+			let g:vst_2html_css = style
+		endif
+		silent call cursor(1,1)
+		silent normal! "zyG
 		silent bwipeout! tmp-2html.html
 		silent bwipeout! tmp-2html
-		let @z = substitute(@z, '\n*$', '', '')
+		let @z = substitute(@z, '\n\+$', '', '')
 		if exists('cscheme')
-			let @z = substitute(@z, '</style>', '</style>\n<pre class="tohtml-'.filetype.'----'.cscheme.'">', '')
+			let @z = substitute(@z, '.*</style>', '\n<pre class="tohtml-'.filetype.'----'.cscheme.'">', '')
 		else
-			let @z = substitute(@z, '</style>', '</style>\n<pre class="tohtml-'.filetype.'">', '')
+			let @z = substitute(@z, '.*</style>', '\n<pre class="tohtml-'.filetype.'">', '')
 		endif
 		silent exe 'buffer! '.bufnumber
 		silent exe line
-		silent put z
+		silent! put z
 		let line3 = line('.') - 1
 		silent exe line
 		silent delete
 		silent exe line3
+		unlet! cscheme
 	endwhile
 
-	" Restore settins
+	" Restore settings
 	let @z = z_rez
+	let @y = y_rez
 	if splitb == 0
 		set nosplitbelow
 	endif
@@ -2998,7 +3020,7 @@ function! VST_2html()
 	else
 		let g:html_no_pre = h_no_pre
 	endif
-	" }}}
+	" }}} 
 
 endfunction
 " }}}
@@ -3341,7 +3363,7 @@ function! VST_ImagePar(par, full)
 		let parline = substitute(parline, '^\s*', '', '')
 		if src == ''
 			let src = matchstr(parline, '\(\.\. \)\?image::\s*\zs.\{-}\ze\s*$')
-			if !filereadable(src)
+			if !filereadable(escape(src, ' \#%'))
 				let noimage = 1
 				let g:vst_error .= "No image: ".src."\n"
 			else
@@ -3399,7 +3421,8 @@ function! VST_ImagePar(par, full)
 		endif
 	endfor
 	if src != ''
-		let src = 'src="'.VST_ProtectLiteral(src).'"'
+		let tempsrc = VST_ProtectLiteral(src)
+		let src = 'src="'.tempsrc.'"'
 	endif
 	if scale != ''
 		if width != ''
@@ -3417,6 +3440,8 @@ function! VST_ImagePar(par, full)
 	endif
 	if alt != ''
 		let alt = ' alt="'.alt.'"'
+	else
+		let alt = ' alt="'.tempsrc.'"'
 	endif
 	if title != ''
 		let title = ' title="'.title.'"'
@@ -3453,7 +3478,11 @@ function! VST_ImagePar(par, full)
 	else
 		let para = '<vim:!-- '.a:par.' -->'
 	endif
-	return para
+	if a:full == 1
+		return "<vim:p>\n".para."\n</vim:p>"
+	else
+		return para
+	endif
 endfunction
 " }}}
 " VST_LabelFootnote: Create auto-numbered footnotes [#first]_ {{{
@@ -3521,7 +3550,7 @@ endfunction
 function! VST_ProtectLiteral(text)
 	" Escaping of special characters
 	let par = substitute(a:text, '`', '\&#96;', 'g')
-	let par = substitute(a:text, '[', '\&#91;', 'g')
+	let par = substitute(par, '[', '\&#91;', 'g')
 	let par = substitute(par, '_', '\&#95;', 'g')
 	let par = substitute(par, '|', '\&#124;', 'g')
 	let par = substitute(par, '\', '\&#92;', 'g')
@@ -3888,7 +3917,7 @@ endfunction
 " VST_FoldExpr: Folding expression {{{
 " lnum - current line to evaluate fold level
 function! VST_FoldExpr(lnum)
-	let list = keys(b:fold)
+	let list = keys(b:vst_fold)
 	if string(list) =~? "'".escape(getline(a:lnum), '.*\[~&^$')."'"
 		return '>1'
 	else
@@ -3946,15 +3975,22 @@ endfunction
 
 	let text = getline(a:line1, a:line2)
 
+	" Include external files before anything else will be done {{{
+	" But only for "real" export
+	if ',pdf,xml,html,s5,latex,tex,' =~ ','.format.','
 	let rec_counter = 0
 	while rec_counter < &maxfuncdepth
-		" Include external files before anything else will be done {{{
 		" if len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. \\(header\\|include\\|footer\\)::"')) > 0
 		" Tried to do in one regexp, but its alternative was sometimes working, sometimes not
 		" Note: it always works... even inside of preformatted text
 		let isinclude = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. include::"'))
 		let isheader = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. header::"'))
 		let isfooter = len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. footer::"'))
+		" End loop when there are no including commands, save up to 100
+		" filtering
+		if isinclude == 0 && isheader == 0 && isfooter == 0
+			break
+		endif
 		if isinclude > 0 || isheader > 0 || isfooter > 0
 			let i = 0
 			while i < len(text)
@@ -3967,15 +4003,23 @@ endfunction
 						let include[3] = matchstr(include[3], '^.\zs.*\ze.$')
 						let include[3] = g:vst_included.'/'.include[3]
 					endif
-					let inc_indent = len(include[1])
+					" let inc_indent = len(include[1])
+					" EXPERIMENTAL: change \ into / - windows separator into
+					" unix separator and vice versa depending on running
+					" system
+					if has("win16") || has("win32") || has("win64") || has("win95") || has("dos16") || has("dos32")
+						let include[3] = substitute(include[3], '/', '\\', 'g')
+					else
+						let include[3] = substitute(include[3], '\\', '/', 'g')
+					endif
 					if filereadable(include[3])
 						let included = readfile(include[3])
-						call map(included, 'repeat(" ", inc_indent).v:val')
-						if include[1] == 'header'
+						call map(included, 'include[1].v:val')
+						if include[2] == 'header'
 							let text[i] = ''
 							let included += ['']
 							call extend(text, included, 0)
-						elseif include[1] == 'footer'
+						elseif include[2] == 'footer'
 							let text[i] = ''
 							let included = [''] + included
 							call extend(text, included)
@@ -4003,16 +4047,23 @@ endfunction
 							let text[i] = ''
 							if format !~ 's5'
 								let included = ['.. block:: vstfooter','', '   ------------------------',
-									\ '', '   '.include[3], '']
+									\ '', '   '.VST_ProtectLiteral(include[3]), '']
 								call extend(text, included)
 							else
-								let s5footer = include[3]
+								let s5footer = VST_ProtectLiteral(include[3])
 							endif
 						elseif include[2] == 'header'
 							let text[i] = ''
-							let included = ['.. block:: vstfooter','', '   '.include[3],
+							let included = ['.. block:: vstfooter','', '   '.VST_ProtectLiteral(include[3]),
 								\ '', '   ------------------------', '']
 							call extend(text, included, 0)
+						endif
+					else
+						if include[3] !~ '^{.*}$'
+							let text[i] = ''
+							let included = [include[1].'.. Unknown file: '.VST_ProtectLiteral(include[3]), 
+								\ '', include[1].'..']
+							call extend(text, included, i+1)
 						endif
 					endif
 					if exists('included')
@@ -4024,8 +4075,8 @@ endfunction
 		endif
 		let rec_counter += 1
 	endwhile
-	let g:a0 = rec_counter
 	unlet! rec_counter
+	endif
 	" }}}
 	" Preprocess text to ... 	{{{
 	" But not for preproc export:
@@ -4311,11 +4362,13 @@ endfunction
 
 		" g:vst_css_default g:vst_css_user
 		if g:vst_css_default == '' && g:vst_css_user == ''
-			let css = '<style type="text/css">'."\n".default_css."\n".'</style>'
+			let css = '<style type="text/css">'."\n".'/*<![CDATA[*/'."\n"
+						\ .default_css."\n".'/*]]>*/'."\n".'</style>'
 		endif
 
 		if g:vst_css_default == '' && g:vst_css_user != ''
-			let css = '<style type="text/css">'."\n".default_css."\n".'</style>'."\n"
+			let css = '<style type="text/css">'."\n".'/*<![CDATA[*/'."\n"
+						\ .default_css."\n".'/*]]>*/'."\n".'</style>'
 			let css .= '<link rel="stylesheet" href="'.g:vst_css_user.'" type="text/css" />'."\n"
 		endif
 
@@ -4425,7 +4478,9 @@ endfunction
 					\.'<script src="s5ui/slides.js" type="text/javascript"></script>'."\n"
 					\.'<!-- VST-S5 -->'."\n"
 					\.'<style type="text/css">'."\n"
+					\.'/*<![CDATA[*/'."\n"
 					\.'h1:before, h2:before, h3:before, h4:before, h5:before, h6:before { content: "" }'."\n"
+					\.'/*]]>*/'."\n"
 					\.'</style>'."\n"
 			let s5body = ''
 					\.'<div class="layout">'."\n"
@@ -4616,8 +4671,16 @@ endfunction
 		" }}}
 		" Create 2html colored preformatted text {{{
 		silent call cursor(1,1)
-		if search('<pre class="tohtml-[^"]\+">') " && has('gui_running')
+		if search('<pre class="tohtml-[^"]\+">')
 			call VST_2html()
+			if exists('g:vst_2html_css')
+				silent call cursor(1,1)
+				let tohtml_css = '<style type="text/css">'."\n".'/*<![CDATA[*/'."\n"
+					\ .join(g:vst_2html_css, "\n")."\n".'/*]]>*/'."\n".'</style>'
+				call search('<\/head>')
+				put! =tohtml_css
+				unlet! g:vst_2html_css
+			endif
 		endif
 		redraw!
 		" }}}
@@ -4625,9 +4688,10 @@ endfunction
 		silent call cursor(1,1)
 		while search('-vst-raw-file-placeholder:', 'W')
 			let rawfile = matchstr(getline('.'), '-vst-raw-file-placeholder:\zs.*')
+			let g:rf = rawfile
 			silent s/.*//ge
 			if filereadable(rawfile)
-				exe 'read '.escape(rawfile, ' \#%')
+				exe 'silent read '.escape(rawfile, ' \#%')
 			endif
 		endwhile
 		" }}}
@@ -4862,15 +4926,13 @@ endfunction
 		" Create attributions
 		let file = substitute(file, '<vim:p class="attribution.\{-}>\(.\{-}\)</vim:p>', '\\attribution{\1}', "g")
 		
-		" Ignore all <vim:p> tags
-		let file = substitute(file, '<.\?vim:p\>.\{-}>', "", "g")
+		" Replace table of contents
+		let file = substitute(file, '<vim:p id="tocheader" \_.\{-}\.\. comment:: end of toc -->', '\n\\tableofcontents', '')
 
 		" Replace new line tags <vim:br>
 		let file = substitute(file, '\n\s*<vim:br.\{-}>\s*\n', '\n\n', "g")
 		let file = substitute(file, '<vim:br.\{-}>', '\\\\', "g")
 
-		" Replace table of contents
-		let file = substitute(file, '<vim:span id="tocheader" \_.\{-}\.\. comment:: end of toc -->', '\n\\tableofcontents', '')
 		" Title
 		let file = substitute(file, '<vim:h1.\{-}>\_s*\(.\{-}\)</vim:h1>', '\\title{\1}\n\\maketitle', "g")
 		" Sections
@@ -5043,6 +5105,10 @@ endfunction
 		" let file = substitute(file, '<vim:span.\{-}>', '\\emph{', 'g')
 		let file = substitute(file, '<vim:span class="\(.\{-}\)">', '\\vst\1{', 'g')
 
+		" Ignore all <vim:p> tags
+		let file = substitute(file, '<.\?vim:p\>.\{-}>', "", "g")
+
+
 		" Make sure no (La)TeX entity is in URL address of hyperlinks
 		let file = substitute(file, '\\href{\([^}]\{-}\)\\\(La\)\?TeX{}', '\\href{\1\2TeX', 'g')
 		let file = substitute(file, '\\hypertarget{\([^}]\{-}\)\\\(La\)\?TeX{}', '\\hypertarget{\1\2TeX', 'g')
@@ -5068,7 +5134,7 @@ endfunction
 		" which have to be worked out
 		"\.'{\renewcommand{\makelabel}[1]{\parbox[b]{\labelwidth}{\makebox[0pt][l]{\textbf{##1}}\mbox{}\\}}'."\n"
 		let preamble = 
-			\ '\documentclass{article}'."\n"
+			\ '\documentclass[12pt]{article}'."\n"
 			\.'\usepackage[a4paper,margin=2.5cm,nohead]{geometry}'."\n"
 			\.'\usepackage{'.listings."}\n"
 			\.'\usepackage{graphicx}'."\n"
@@ -5095,7 +5161,7 @@ endfunction
 			\.'\setlength{\extrarowheight}{2pt}'."\n"
 			\.tocdepth."\n"
 			\.'\newcommand{\transition}{\begin{center}\rule{.8\textwidth}{0.2pt}\end{center}}'."\n"
-			\.'\newcommand{\subtitle}[1]{{\large\textsc{#1}}}'."\n"
+			\.'\newcommand{\subtitle}[1]{{\large\textsc{#1}}\vskip15pt}'."\n"
 			\.'\newcommand{\subs}[1]{\raisebox{-0.7ex}{\footnotesize #1}}'."\n"
 			\.'\newcommand{\sups}[1]{\raisebox{0.7ex}{\footnotesize #1}}'."\n"
 			\.'\newcommand{\attribution}[1]{\raggedleft\textit{#1}}'."\n"
@@ -5358,8 +5424,11 @@ endfunction
 		" }}}
 		" Insert raw files {{{
 		silent call cursor(1,1)
-		while search('-vst-raw-file-placeholder:', 'bW')
+		while search('-vst-raw-file-placeholder:', 'W')
 			let file = matchstr(getline('.'), '-vst-raw-file-placeholder:\zs.*')
+			" Remove \ before _ - in most cases it was placed there by
+			" escaping mechanism, not user
+			let file = substitute(file, '\\_', '_', 'g')
 			silent s/.*//ge
 			exe 'silent read '.escape(file, ' \#%')
 		endwhile
@@ -5471,13 +5540,13 @@ endfunction
 		silent call cursor(1,1)
 		call VST_End()
 		" }}}
+		" }}}
 	" Auxiliary commands {{{
 	elseif format =~ '^head'
 		" Symbols for section titles {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
 		echo VST_DictTable(g:vst_headers, 'Level', 'Symbol', 0)
-		return ''
 		" }}}
 	elseif format =~ '^toc'
 		" Table of contents for file {{{
@@ -5486,32 +5555,117 @@ endfunction
 		unlet! b:vst_first_parsing
 		let i = 1
 		let tocc = []
+		let b:vst_toc_numbers = {}
+		let i1 = -1
+		let i2 = -1
+		let i3 = -1
+		let i4 = -1
+		let i5 = -1
+		let i6 = -1
 
 		while i < len(g:paras)
 			if g:ptype[i] =~ '^h\d'
+				" Real table
 				call add(tocc, [g:ptype[i], g:paras[i], g:plinen[i]])
+				" Header numbers
+				let header_text = matchstr(g:paras[i], '^.\{-}\ze\n')
+				let lvl = strpart(g:ptype[i], 1)
+				if lvl == 1
+					let b:vst_toc_numbers[header_text] = ''
+					let i2 = 0
+					let i3 = 0
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 2
+					let i2 += 1
+					let b:vst_toc_numbers[header_text] = i2.'  '
+					let i3 = 0
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 3
+					let i3 += 1
+					let b:vst_toc_numbers[header_text] = i2.'.'.i3.'  '
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 4
+					let i4 += 1
+					let b:vst_toc_numbers[header_text] = i2.'.'.i3.'.'.i4.'  '
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 5
+					let i5 += 1
+					let b:vst_toc_numbers[header_text] = i2.'.'.i3.'.'.i4.'.'.i5.'  '
+					let i6 = 0
+				elseif lvl == 6
+					let i6 += 1
+					let b:vst_toc_numbers[header_text] = i2.'.'.i3.'.'.i4.'.'.i5.'.'.i6.'  '
+				endif
 			endif
 			let i += 1
 		endwhile
-		let g:tocc = tocc
 
 		echo VST_TocTable(tocc, 'Nr', 'Title', 'Line', line)
-		return ''
 		" }}}
 	elseif format =~ '^fold'
 		" Folding {{{
-		let b:fold = {}
+		let b:vst_fold = {}
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-
+		" Prepare numbers of head lines {{{
+		let b:vst_fold_numbers = {}
 		let i = 0
+		let i1 = -1
+		let i2 = -1
+		let i3 = -1
+		let i4 = -1
+		let i5 = -1
+		let i6 = -1
 		while i < len(g:paras)
 			if g:ptype[i] =~ '^h\d'
-				let fline = matchstr(g:paras[i], '^.\{-}\ze\n')
-				let b:fold[fline] = strpart(g:ptype[i], 1)-1
+				let header_text = matchstr(g:paras[i], '^.\{-}\ze\n')
+				let lvl = strpart(g:ptype[i], 1)
+				if lvl == 1
+					let b:vst_fold_numbers[header_text] = ''
+					let i2 = 0
+					let i3 = 0
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 2
+					let i2 += 1
+					let b:vst_fold_numbers[header_text] = i2.'  '
+					let i3 = 0
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 3
+					let i3 += 1
+					let b:vst_fold_numbers[header_text] = i2.'.'.i3.'  '
+					let i4 = 0
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 4
+					let i4 += 1
+					let b:vst_fold_numbers[header_text] = i2.'.'.i3.'.'.i4.'  '
+					let i5 = 0
+					let i6 = 0
+				elseif lvl == 5
+					let i5 += 1
+					let b:vst_fold_numbers[header_text] = i2.'.'.i3.'.'.i4.'.'.i5.'  '
+					let i6 = 0
+				elseif lvl == 6
+					let i6 += 1
+					let b:vst_fold_numbers[header_text] = i2.'.'.i3.'.'.i4.'.'.i5.'.'.i6.'  '
+				endif
+
+				let b:vst_fold[header_text] = lvl-1
 			endif
 			let i += 1
 		endwhile
+		" }}}
 		setlocal foldmethod=expr
 		setlocal foldexpr=VST_FoldExpr(v:lnum)
 		setlocal foldtext=VST_FoldText()
@@ -5532,12 +5686,12 @@ endfunction
 		let directive = matchstr(format, '^f\zs.*')
 		setlocal foldmethod=expr
 		exe "setlocal foldexpr=getline(v:lnum)=~?'^\\\\s*\\\.\\\.\\\ ".directive."::'?'>1':1"
-		function! VST_FoldText()
+		function! VST_FoldDirective()
 			let text = getline(v:foldstart)
 			let indent = '+'.v:folddashes
 			return indent.repeat(' ', 2).text.' '
 		endfunction
-		setlocal foldtext=VST_FoldText()
+		setlocal foldtext=VST_FoldDirective()
 		" }}}
 	elseif format =~ '^fblank'
 		" Folding by blank lines {{{
@@ -5556,28 +5710,24 @@ endfunction
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
 		echo VST_DictTable(g:hlinkdb, 'Text', 'Link', 0)
-		return ''
 		" }}}
 	elseif format =~ '^slink'
 		" Sorted link table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
 		echo VST_DictTable(g:hlinkdb, 'Text', 'Link', 1)
-		return ''
 		" }}}
 	elseif format =~ '^rep'
 		" Replacement table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
 		echo VST_DictTable(g:replacedb, 'Symbol', 'Replacement', 0)
-		return ''
 		" }}}
 	elseif format =~ '^srep'
 		" Sorted replacement table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
 		echo VST_DictTable(g:replacedb, 'Symbol', 'Replacement', 1)
-		return ''
 		" }}}
 	elseif format =~ '^help'
 		" Help for commands {{{
@@ -5611,12 +5761,142 @@ endfunction
 		let jtext = join(text, "\n")
 		silent 0put =jtext
 		silent call cursor(1,1)
-		return ''
 		" }}}
 	" }}}
 	endif 
 
+	call VST_End()
+
+	return ''
+
 endfunction
 " }}}
 
+" Functions for auxiliary mappings {{{
+function! vst#vst#VST_AuxiliaryMappings()
+" VST_Ornaments: insert ornaments depending on position {{{
+" Description: Depending on position and inserted character inserted before
+" cursor fill ornaments: single section ornaments, double section ornaments,
+" transition element
+function! VST_Ornaments()
+	" Get ornament character
+	" HEADDEF:
+	let s:vst_headdef = '\(=\{3,}\|+\{3,}\|\*\{3,}\|\^\{3,}\|%\{3,}\|\$\{3,}\|#\{3,}\|@\{3,}\|;\{3,}\|"\{3,}\|\.\{3,}\|,\{3,}\|`\{3,}\|\~\{3,}\|-\{3,}\|!\{3,}\|(\{3,}\|)\{3,}\|:\{3,}\|_\{3,}\|&\{3,}\|}\{3,}\|{\{3,}\||\{3,}\|?\{3,}\|<\{3,}\|>\{3,}\|\\\{3,}\|\[\{3,}\|\]\{3,}\|\/\{3,}\|''\{3,}\)'
+	let s:vst_headchars = '[][=+*^%$#@;".,`~!():_&{}|?<>/\\''-]'
+	let curline = getline(line('.'))
+	let character = curline[len(curline)-1]
+	if curline =~ '^\s*$'
+		" Temporary thing, to by-pass headchars test
+		let character = '-'
+	elseif curline !~ '^\s*'.s:vst_headchars.'$'
+		return ''
+	endif
+
+	let prevline = getline(line('.')-1)
+	let nextline = getline(line('.')+1)
+
+	if prevline =~ '^\s*$'
+		let prevline_is_empty = 1
+	else
+		let prevline_is_empty = 0
+	endif
+
+	if nextline =~ '^\s*$'
+		let nextline_is_empty = 1
+	else
+		let nextline_is_empty = 0
+	endif
+
+	if prevline_is_empty == 1 && nextline_is_empty == 1
+		" We are to insert transition element
+		if &tw > 50
+			let trans_len = &tw/3
+		else
+			let trans_len = 20
+		endif
+		if curline =~ '^\s*$'
+			" Current line consists of only white characters. Try to find last
+			" used transition
+			let last_trans_line = search('\n\s*\n\s*'.s:vst_headdef.'\s*\n\s*\n' , 'bWn') + 2
+			if last_trans_line == 2
+				let character = '-'
+			else
+				let character = matchstr(getline(last_trans_line), '^\s*\zs.\ze')
+			endif
+		endif
+		return repeat(character, trans_len)
+	elseif prevline_is_empty == 0 && nextline_is_empty == 1
+		" Insert single ornament
+		let prevline_len = len(prevline)
+		if curline =~ '^\s*$'
+			" Current line consists of only white characters. Try to find last
+			" single ornament section
+			let last_single_ornament = search('\(\%^\|\n\s*\n\|\%^\s*\n\).\{-}\n\s*'.s:vst_headdef.'\s*\n\s*\n' , 'bWn') + 3
+			if last_single_ornament == 4 && getline(1) =~ '^\s*$' && getline(2) =~ '^\s*$'
+				let last_single_ornament = 4
+			elseif last_single_ornament == 4 && getline(1) =~ '^\s*$'
+				let last_single_ornament = 3
+				let real3 = 1
+			elseif last_single_ornament == 4
+				let last_single_ornament = 2
+			endif
+			if last_single_ornament == 3 
+				if !exists('real3')
+					let character = '-'
+				else
+					let character = matchstr(getline(last_single_ornament), '^\s*\zs.\ze')
+					unlet! real3
+				endif
+			else
+				let character = matchstr(getline(last_single_ornament), '^\s*\zs.\ze')
+			endif
+		endif
+		if prevline_len - len(curline) < 3
+			let ornament_len = 3
+		else
+			let ornament_len = prevline_len - len(curline)
+		endif
+		return repeat(character, ornament_len)."\n"
+	elseif prevline_is_empty == 1 && nextline_is_empty == 0
+		" Insert double ornament
+		let nextline_len = len(nextline)
+		" Unfortunately this line borks undo history
+		normal! 2"_dd
+		if curline =~ '^\s*$'
+			" Current line consists of only white characters. Try to find last
+			" used ornament
+			let last_double_ornament = search('\(\%^\|\n\s*\n\|\%^\s*\n\)\s*'.s:vst_headdef.'\s*\n.\{-}\n\s*\2\s*\n' , 'bWn') + 2
+			if last_double_ornament == 3 && getline(1) =~ '^\s*$' && getline(2) !~ '^\s*$'
+				let last_double_ornament = 4
+			endif
+			if last_double_ornament == 2
+				let character = '='
+			else
+				let character = matchstr(getline(last_double_ornament), '^\s*\zs.\ze')
+			endif
+		endif
+		if len(curline) == 0
+			let correction = 0
+		else
+			let correction = 1
+		endif
+		if nextline_len - len(curline) + correction < 3
+			let ornament_len = 3
+		else
+			let ornament_len = nextline_len - len(curline) + correction
+		endif
+		let ornament = repeat(character, ornament_len)
+		return ornament."\n".nextline."\n".ornament."\n"
+	else
+		return ''
+	endif
+
+	return ''
+
+endfunction
+" }}}
+" }}}
+" Auxiliary mappings
+inoremap <silent> <C-B>o <C-R>=VST_Ornaments()<CR>
+endfunction
 " vim:fdm=marker:ff=unix:noet:ts=4:sw=4:nowrap
