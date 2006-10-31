@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 13 Oct 2006
-" Version: 1.2
+" Last Change: 31 Oct 2006
+" Version: 1.3
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "
@@ -37,7 +37,7 @@ scriptencoding iso-8859-2
 " Initiate some variables. Not really necessary but makes possible to use
 " command line completion when doing temporary modifications.
 " VST version (for debugging:
-let s:vst_ver = '120'
+let s:vst_ver = '130'
 " Write export immediately
 if !exists("g:vst_write_export")
 	let g:vst_write_export = 0
@@ -65,6 +65,9 @@ if !exists("g:vst_tex_post")
 endif
 if !exists("g:vst_html_post")
 	let g:vst_html_post = ''
+endif
+if !exists("g:vst_containers")
+	let g:vst_containers = []
 endif
 
 " Placeholders:
@@ -118,8 +121,9 @@ function! VST_Headers(text)
 
 	" }}}
 	" Detect and create line types {{{
-	for i in range(len(doc))
-		if i == len(doc) - 1
+	let lendoc = len(doc)
+	for i in range(lendoc)
+		if i == lendoc - 1
 			let nextline = i - 1
 		else
 			let nextline = i + 1
@@ -176,7 +180,7 @@ function! VST_Headers(text)
 				let ltype += ['p']
 			endif
 		elseif doc[i] =~ '^\s*\(--\|-\|/\|:\|+\)\S.\{-}\(  \|$\)' && doc[i] !~ '^\s*\(--\s\|:\S\+:`\)'
-			if len(doc) == 1
+			if lendoc == 1
 				let ltype += ['p']
 			else
 				let ltype += ['optlist']
@@ -298,14 +302,14 @@ function! VST_Headers(text)
 					if g:ptype[j] == 'anonlink'
 						let parlines = split(g:paras[j], '\n')
 						for line in parlines
-							call filter(g:anonhlinkdb, 'v:val !~ "'.line.'"')
+							call filter(g:vst_anonhlinkdb, 'v:val !~ "'.line.'"')
 						endfor
 					endif
 					let g:ptype[j] = 'pre'
 					let g:paras[j] = substitute(g:paras[j], '`', '\&#96;', 'g') 
-					let g:paras[j] = substitute(g:paras[j], '\.', '\&#46;', 'g') 
-					let g:paras[j] = substitute(g:paras[j], '\[', '\&#91;', 'g') 
 					let g:paras[j] = substitute(g:paras[j], '_', '\&#95;', 'g') 
+					let g:paras[j] = substitute(g:paras[j], '\[', '\&#91;', 'g') 
+					let g:paras[j] = substitute(g:paras[j], '\.', '\&#46;', 'g') 
 					let g:paras[j] = substitute(g:paras[j], '|', '\&#124;', 'g') 
 
 				endif
@@ -326,11 +330,11 @@ function! VST_Headers(text)
 		"let b:vst_first_parsing = 1
 
 		" Build here also other databases?
-		let fntext = split(join(g:paras, "\n"), "\n")
+		let fntext = split(join(g:paras, "\n\n"), "\n")
 
 		call VST_CreateDBs(fntext)
 
-		"let g:anonhlinkdb = filter(copy(fntext), 'v:val =~ "^\\s*\\(\\.\\. __:\\|__ \\)"')
+		"let g:vst_anonhlinkdb = filter(copy(fntext), 'v:val =~ "^\\s*\\(\\.\\. __:\\|__ \\)"')
 
 	endif
 	" }}}
@@ -340,7 +344,7 @@ function! VST_Headers(text)
 		if g:ptype[i] == 'replacement'
 			let from = matchstr(g:paras[i], '^\s*\.\. |\zs.\{-}\ze|')
 			let into = matchstr(g:paras[i], '^\s*\.\. |.\{-}|\s\+\zs.*')
-			let g:replacedb[from] = into
+			let g:vst_replacedb[from] = into
 
 		endif
 		let i += 1
@@ -461,8 +465,9 @@ let doc = a:text
 	let toc = ''
 	" }}}
 	" Detect and create line types {{{
-	for line in range(len(doc))
-		if line == len(doc) - 1
+	let lendoc = len(doc)
+	for line in range(lendoc)
+		if line == lendoc - 1
 			let nextline = line - 1
 		else
 			let nextline = line + 1
@@ -597,7 +602,7 @@ let doc = a:text
 		elseif doc[line] =~ '^\s*+=\{3,}'
 			let ltype += ['bltable']
 		elseif doc[line] =~ '^\s*\(--\|-\|/\|:\|+\)\S.\{-}\(  \|$\)' && doc[line] !~ '^\s*\(--\s\|:\S\+:`\)'
-			if len(doc) == 1
+			if lendoc == 1
 				let ltype += ['p']
 			else
 				let ltype += ['optlist']
@@ -659,64 +664,74 @@ let doc = a:text
 	call add(g:plinen, 0)
 	" }}}
 	" Loop through paragraphs to concatenate simple tables. {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'simpletbl'
-			" Check if last line matches simple table syntax
-			if g:paras[i] !~ '\n\s*=\{2,}\(\s\+=\{2,}\)\+\s*$' && i < len(g:paras)-1
-				let g:paras[i] = g:paras[i]."\n\n".g:paras[i+1]
-				" Remove elements from appropriate tables
-				call remove(g:paras,   i+1)
-				call remove(g:pindent, i+1)
-				call remove(g:ptype,   i+1)
-				call remove(g:plinen,  i+1)
-				let i -= 1
+	if string(g:ptype) =~ "'simpletbl'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'simpletbl'
+				" Check if last line matches simple table syntax
+				if g:paras[i] !~ '\n\s*=\{2,}\(\s\+=\{2,}\)\+\s*$' && i < len(g:paras)-1
+					let g:paras[i] = g:paras[i]."\n\n".g:paras[i+1]
+					" Remove elements from appropriate tables
+					call remove(g:paras,   i+1)
+					call remove(g:pindent, i+1)
+					call remove(g:ptype,   i+1)
+					call remove(g:plinen,  i+1)
+					let i -= 1
+				endif
 			endif
-		endif
-		let i += 1
-	endwhile
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Loop through empty paragraphs to make them really empty. {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'empty'
-			let g:paras[i] = ''
-		endif
-		let i += 1
-	endwhile
+	if string(g:ptype) =~ "'empty'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'empty'
+				let g:paras[i] = ''
+			endif
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Loop through rawlatex paragraphs correct next paragraphs. {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'rawlatex'
-			if g:pindent[i+1] > g:pindent[i]
-				let g:ptype[i+1] = 'rawlatexcontent'
+	if string(g:ptype) =~ "'rawlatex'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'rawlatex'
+				if g:pindent[i+1] > g:pindent[i]
+					let g:ptype[i+1] = 'rawlatexcontent'
+				endif
 			endif
-		endif
-		let i += 1
-	endwhile
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Loop through rawboth paragraphs correct next paragraphs. {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'rawboth'
-			if g:pindent[i+1] > g:pindent[i]
-				let g:ptype[i+1] = 'rawbothcontent'
+	if string(g:ptype) =~ "'rawboth'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'rawboth'
+				if g:pindent[i+1] > g:pindent[i]
+					let g:ptype[i+1] = 'rawbothcontent'
+				endif
 			endif
-		endif
-		let i += 1
-	endwhile
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Loop through rawhtml paragraphs correct next paragraphs. {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'rawhtml'
-			if g:pindent[i+1] > g:pindent[i]
-				let g:ptype[i+1] = 'rawhtmlcontent'
+	if string(g:ptype) =~ "'rawhtml'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'rawhtml'
+				if g:pindent[i+1] > g:pindent[i]
+					let g:ptype[i+1] = 'rawhtmlcontent'
+				endif
 			endif
-		endif
-		let i += 1
-	endwhile
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Loop through p paragraphs to sort out additional types (dl). {{{
 	let i = 0
@@ -745,7 +760,7 @@ let doc = a:text
 					if g:ptype[i] == 'anonlink'
 						let parlines = split(g:paras[i], '\n')
 						for line in parlines
-							call filter(g:anonhlinkdb, 'v:val !~ "'.line.'"')
+							call filter(g:vst_anonhlinkdb, 'v:val !~ "'.line.'"')
 						endfor
 					endif
 					let g:ptype[i] = 'prequoted'
@@ -759,14 +774,16 @@ let doc = a:text
 	endwhile
 	" }}}
 	" Create auto numbered footnotes database {{{
-	let i = 0
 	let g:autofootnotes = []
-	while i < len(g:paras)
-		if g:ptype[i] == 'autofootnote'
-			let g:autofootnotes += [g:paras[i]]
-		endif
-		let i += 1
-	endwhile
+	if string(g:ptype) =~ "'autofootnote'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'autofootnote'
+				let g:autofootnotes += [g:paras[i]]
+			endif
+			let i += 1
+		endwhile
+	endif
 	" }}}
 	" Check and embrace paragraphs in pre tags <pre> (::) {{{
 	let i = 0
@@ -850,7 +867,7 @@ let doc = a:text
 					if g:ptype[j] == 'anonlink'
 						let parlines = split(g:paras[j], '\n')
 						for line in parlines
-							call filter(g:anonhlinkdb, 'v:val !~ "'.line.'"')
+							call filter(g:vst_anonhlinkdb, 'v:val !~ "'.line.'"')
 						endfor
 					endif
 					let g:ptype[j] = 'pre'
@@ -860,12 +877,12 @@ let doc = a:text
 					let g:paras[j] = VST_SpecCharacter(g:paras[j])
 					" Prevent splitting for auto footnotes and hyperlinks or
 					" special treatment of backslashes
-					let g:paras[j] = substitute(g:paras[j], '`', '\&#96;', 'g') 
+					let g:paras[j] = substitute(g:paras[j], '`',  '\&#96;', 'g') 
 					let g:paras[j] = substitute(g:paras[j], '\.', '\&#46;', 'g') 
 					let g:paras[j] = substitute(g:paras[j], '\[', '\&#91;', 'g') 
 					let g:paras[j] = substitute(g:paras[j], '\\', '\&#92;', 'g') 
-					let g:paras[j] = substitute(g:paras[j], '_', '\&#95;', 'g') 
-					let g:paras[j] = substitute(g:paras[j], '|', '\&#124;', 'g') 
+					let g:paras[j] = substitute(g:paras[j], '_',  '\&#95;', 'g') 
+					let g:paras[j] = substitute(g:paras[j], '|',  '\&#124;', 'g') 
 
 				endif
 				let j += 1
@@ -884,7 +901,7 @@ let doc = a:text
 		" tables cells). Set this variable and unlet it when returning from export
 		let b:vst_first_parsing = 1
 
-		let fntext = split(join(g:paras, "\n"), "\n")
+		let fntext = split(join(g:paras, "\n\n"), "\n")
 
 		" Create hyperlink and other databases
 		call VST_CreateDBs(fntext)
@@ -923,16 +940,17 @@ let doc = a:text
 	endif
 	" }}}
 	" Build replacement database.  {{{
-	let i = 0
-	while i < len(g:paras)
-		if g:ptype[i] == 'replacement'
-			let from = matchstr(g:paras[i], '^\s*\.\. |\zs.\{-}\ze|')
-			let into = matchstr(g:paras[i], '^\s*\.\. |.\{-}|\s\+\zs.*')
-			let g:replacedb[from] = into
-
-		endif
-		let i += 1
-	endwhile
+	if string(g:ptype) =~ "'replacement'"
+		let i = 0
+		while i < len(g:paras)
+			if g:ptype[i] == 'replacement'
+				let from = matchstr(g:paras[i], '^\s*\.\. |\zs.\{-}\ze|')
+				let into = matchstr(g:paras[i], '^\s*\.\. |.\{-}|\s\+\zs.*')
+				let g:vst_replacedb[from] = into
+			endif
+			let i += 1
+		endwhile
+	endif
 " }}}
 	" Detect and create multi element directives (MED) {{{
 	let i = 0
@@ -1068,8 +1086,8 @@ let doc = a:text
 						while target =~ '_\s*$'
 							let title = matchstr(target, '^\s*\(`\?\)\zs.*\ze\1_\s*$')
 							" If ends in _ it is probably indirect link, process it
-							if has_key(g:hlinkdb, title) && g:hlinkdb[title] != ''
-								let target = escape(g:hlinkdb[title], '&\~')
+							if has_key(g:vst_hlinkdb, title) && g:vst_hlinkdb[title] != ''
+								let target = escape(g:vst_hlinkdb[title], '&\~')
 							else
 								let target = '#l'.tolower(VST_IdMaker(title))
 							endif
@@ -1250,6 +1268,7 @@ let doc = a:text
 				let class = 'vstcompound'
 			endif
 			let g:paras[i] = indent.'<vim:block id="id-'.i.'" class="'.tolower(class).'">'
+			let g:vst_containers += [tolower(class)]
 
 			let medtype = 'block'
 
@@ -1260,6 +1279,7 @@ let doc = a:text
 			let class = matchstr(g:paras[i], '^\s*\.\. container::\s*\zs.*\ze\s*')
 			let class = VST_IdMaker(class)
 			let g:paras[i] = indent.'<vim:container id="id-'.i.'" class="'.tolower(class).'">'
+			let g:vst_containers += [tolower(class)]
 			" }}}
 			elseif medtype == 'topic'
 			" Multi element topic {{{
@@ -1317,6 +1337,7 @@ let doc = a:text
 			let class = matchstr(g:paras[i], '^\s*\.\. block::\s*\zs.*\ze\s*')
 			let class = VST_IdMaker(class)
 			let g:paras[i] = indent.'<vim:block id="id-'.i.'" class="'.tolower(class).'">'
+			let g:vst_containers += [tolower(class)]
 			" }}}
 			elseif medtype == 'pullquote'
 			" Bigger blockquote {{{
@@ -1492,60 +1513,65 @@ let doc = a:text
 	" }}}
 " Formatting
 " Create dl paragraph {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'dl'
-	"let initind = strlen(matchstr(g:paras[i], '\n\zs\s*\ze.\{-}'))
-	let parlines = split(g:paras[i], '\n')
-	let initind = strlen(matchstr(parlines[-1], '^\s*'))
-	let j = i + 1
-		while j < len(g:paras)
-			if g:pindent[j] < initind || g:ptype[j] == 'blank'
-				let newind = repeat(' ', g:pindent[j])
-				call insert(g:paras, newind.'</vim:dd>'."\n".newind.'</vim:dl>', j)
-				call insert(g:pindent, g:pindent[i], j)
-				call insert(g:ptype, 'dlend', j)
-				call insert(g:plinen, 0, j)
+if string(g:ptype) =~ "'dl'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'dl'
+		"let initind = strlen(matchstr(g:paras[i], '\n\zs\s*\ze.\{-}'))
+		let parlines = split(g:paras[i], '\n')
+		let initind = strlen(matchstr(parlines[-1], '^\s*'))
+		let j = i + 1
+			while j < len(g:paras)
+				if g:pindent[j] < initind || g:ptype[j] == 'blank'
+					let newind = repeat(' ', g:pindent[j])
+					call insert(g:paras, newind.'</vim:dd>'."\n".newind.'</vim:dl>', j)
+					call insert(g:pindent, g:pindent[i], j)
+					call insert(g:ptype, 'dlend', j)
+					call insert(g:plinen, 0, j)
 
-				call insert(g:paras, repeat(' ', g:pindent[i]).'<vim:dl'.VST_AddClass(i,1,' ','').'>', i)
-				call insert(g:pindent, g:pindent[i], i)
-				call insert(g:ptype, 'dlbegin', i)
-				call insert(g:plinen, 0, i)
+					call insert(g:paras, repeat(' ', g:pindent[i]).'<vim:dl'.VST_AddClass(i,1,' ','').'>', i)
+					call insert(g:pindent, g:pindent[i], i)
+					call insert(g:ptype, 'dlbegin', i)
+					call insert(g:plinen, 0, i)
 
-				" Recompensate inserted paragraph before current position.
-				let i += 1
+					" Recompensate paragraph inserted before current position.
+					let i += 1
 
-				break
-			else
-				if g:ptype[j] == 'blockquote'
-					if g:pindent[j] == initind
-						let g:ptype[j] = 'p'
+					break
+				else
+					if g:ptype[j] == 'blockquote'
+						if g:pindent[j] == initind
+							let g:ptype[j] = 'p'
+						endif
 					endif
-				endif
 
-			endif
-			let j += 1
-		endwhile
-		
-	endif
-	let i += 1
-endwhile
+				endif
+				let j += 1
+			endwhile
+			
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Detect and pre-prepare definition list (<dl>) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'dl'
-		let defterm = matchlist(g:paras[i], '^\(.\{-}\n\)\(\s*\)\(.*\)')
-		let defpar = split(substitute(defterm[3], '\n\s*', '\n', 'g'), "\n")
-		let defterm[1] = VST_SpecCharacter(defterm[1])
-		let defpart = "\n".'<vim:dt class="normal">'.defterm[1].'</vim:dt>'."\n".defterm[2].'<vim:dd class="normal">'."\n".defterm[2]
-		let g:paras[i] = defpart.VST_Structure(defpar)
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'dl'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'dl'
+			let defterm = matchlist(g:paras[i], '^\(.\{-}\n\)\(\s*\)\(.*\)')
+			let defpar = split(substitute(defterm[3], '\n\s*', '\n', 'g'), "\n")
+			let defterm[1] = VST_SpecCharacter(defterm[1])
+			let defpart = "\n".'<vim:dt class="normal">'.defterm[1].'</vim:dt>'."\n".defterm[2].'<vim:dd class="normal">'."\n".defterm[2]
+			let g:paras[i] = defpart.VST_Structure(defpar)
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
-	" Prepare quoted literal paragraphs (:: <! etc.) {{{
-	" This can be only one paragraph so don't worry about other pre troubles
+" Prepare quoted literal paragraphs (:: <! etc.) {{{
+" This can be only one paragraph so don't worry about other pre troubles
+if string(g:ptype) =~ "'prequoted'"
 	let i = 0
 	while i < len(g:paras)
 		if g:ptype[i] == 'prequoted'
@@ -1567,382 +1593,407 @@ endwhile
 		endif
 		let i += 1
 	endwhile
+endif
 	" }}}
 " Create option list paragraph {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'optlist'
-		" Detect indentation of option list
-		let listindent = strlen(matchstr(g:paras[i], '^\s*\zs\(--\|-\|/\|:\|+\)\S.\{-}  \s*'))
-		let j = i + 1
-		while j < len(g:paras)
-			if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank'
-				let newind = repeat(' ', g:pindent[j])
-				call insert(g:paras, newind.'</vim:dd>'."\n".newind.'</vim:dl class="option'.VST_AddClass(i,0, ' ','').'">', j)
-				call insert(g:pindent, g:pindent[i], j)
-				call insert(g:ptype, 'optend', j)
-				call insert(g:plinen, 0, j)
+if string(g:ptype) =~ "'optlist'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'optlist'
+			" Detect indentation of option list
+			let listindent = strlen(matchstr(g:paras[i], '^\s*\zs\(--\|-\|/\|:\|+\)\S.\{-}  \s*'))
+			let j = i + 1
+			while j < len(g:paras)
+				if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank'
+					let newind = repeat(' ', g:pindent[j])
+					call insert(g:paras, newind.'</vim:dd>'."\n".newind.'</vim:dl class="option'.VST_AddClass(i,0, ' ','').'">', j)
+					call insert(g:pindent, g:pindent[i], j)
+					call insert(g:ptype, 'optend', j)
+					call insert(g:plinen, 0, j)
 
-				call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:dl class="option'.VST_AddClass(i,0, ' ','').'">', i)
-				call insert(g:pindent, g:pindent[i], i)
-				call insert(g:ptype, 'optbegin', i)
-				call insert(g:plinen, 0, i)
+					call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:dl class="option'.VST_AddClass(i,0, ' ','').'">', i)
+					call insert(g:pindent, g:pindent[i], i)
+					call insert(g:ptype, 'optbegin', i)
+					call insert(g:plinen, 0, i)
 
-				" Recompensate inserted paragraph before current position.
-				let i += 1
+					" Recompensate inserted paragraph before current position.
+					let i += 1
 
-				break
-			else
-				if g:ptype[j] == 'blockquote'
-					if g:pindent[j] == g:pindent[i] + listindent
-						let g:ptype[j] = 'p'
+					break
+				else
+					if g:ptype[j] == 'blockquote'
+						if g:pindent[j] == g:pindent[i] + listindent
+							let g:ptype[j] = 'p'
+						endif
 					endif
-				endif
 
-			endif
-			let j += 1
-		endwhile
-		
-		let g:paras[i] = VST_SpecCharacter(g:paras[i])
-		let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\(--\|-\|/\|:\|+\)\(\S.\{-}\)  ', '\n<vim:dt class="option">\2\3</vim:dt>\n\1<vim:dd class="option">\n\1<vim:p>', '')
-		let g:paras[i] = substitute(g:paras[i], '\n\(\s*\)\(--\|-\|/\|:\|+\)\(\S.\{-}\)  ', '</vim:p></vim:dd>\n\1<vim:dt class="option">\2\3</vim:dt>\n\1<vim:dd class="option">\n\1<vim:p>', 'g')
-		let g:paras[i] = substitute(g:paras[i], '$', '</vim:p>', '')
-	endif
-let i += 1
-endwhile
+				endif
+				let j += 1
+			endwhile
+			
+			let g:paras[i] = VST_SpecCharacter(g:paras[i])
+			let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\(--\|-\|/\|:\|+\)\(\S.\{-}\)  ', '\n<vim:dt class="option">\2\3</vim:dt>\n\1<vim:dd class="option">\n\1<vim:p>', '')
+			let g:paras[i] = substitute(g:paras[i], '\n\(\s*\)\(--\|-\|/\|:\|+\)\(\S.\{-}\)  ', '</vim:p></vim:dd>\n\1<vim:dt class="option">\2\3</vim:dt>\n\1<vim:dd class="option">\n\1<vim:p>', 'g')
+			let g:paras[i] = substitute(g:paras[i], '$', '</vim:p>', '')
+		endif
+	let i += 1
+	endwhile
+endif
 " }}}
 " Create field list {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'field'
-		let g:paras[i] = VST_SpecCharacter(g:paras[i])
-		let parlines = split(g:paras[i], '\(^\s*\|\n\s*\):\@=')
-		let j = 0
-		for parline in parlines
-			let fkey = tolower(matchstr(parlines[j], '^\s*:\zs.\{-}\ze:'))
-			let fcontent = matchstr(parlines[j], '^\s*:.\{-}:\s*\zs.*')
-			if fkey == 'date' && fcontent == 'NONE'
-				let parlines[j] = ''
+if string(g:ptype) =~ "'field'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'field'
+			let g:paras[i] = VST_SpecCharacter(g:paras[i])
+			let parlines = split(g:paras[i], '\(^\s*\|\n\s*\):\@=')
+			let j = 0
+			for parline in parlines
+				let fkey = tolower(matchstr(parlines[j], '^\s*:\zs.\{-}\ze:'))
+				let fcontent = matchstr(parlines[j], '^\s*:.\{-}:\s*\zs.*')
+				if fkey == 'date' && fcontent == 'NONE'
+					let parlines[j] = ''
+				endif
+				if fkey != ''
+					let g:vst_fielddb[fkey] = fcontent
+				endif
+				let parlines[j] = substitute(parlines[j], '^\s*:', '<vim:dt class="field">', '')
+				let parlines[j] = substitute(parlines[j], '\(vim\)\@<!:', ':</vim:dt><vim:dd class="field">', '')
+				let parlines[j] .= '</vim:dd>'."\n"
+				let parlines[j] = substitute(parlines[j], '\c\(class="field">\)\(organization\|date\|status\|revision\|version\|dedication\|abstract\|copyright\)', '\1\u\2', 'g')
+				" Adjustments for special types of fields: dedication, abstract
+				" Has to wait for fixing MEDding of field lists
+				let parlines[j] = substitute(parlines[j], 'class="field">Dedication:</vim:dt><vim:dd class="field">', 'class="field fdedication">Dedication</vim:dt><vim:dd class="field fdedication">','')
+				let parlines[j] = substitute(parlines[j], 'class="field">Abstract:</vim:dt><vim:dd class="field">', 'class="field fabstract">Abstract</vim:dt><vim:dd class="field fabstract">','')
+				let j += 1
+			endfor
+			let g:paras[i] = join(parlines, "\n")
+			let g:paras[i] = '<vim:dl class="field'.VST_AddClass(i,0, ' ', '').'">'.g:paras[i]
+			let g:paras[i] = substitute(g:paras[i], '\(Address:</vim:dt><vim:dd class="field">\)\(.\{-}\)</vim:dd>', '\=submatch(1)."<vim:pre class=\"address\">".substitute(submatch(2), "\\(^\\|\\n\\)\\s\\+", "\\n", "g")."</vim:pre></vim:dd>"','g')
+			if has('unix')
+				" On unices above substitute leaves ^M intead of new line, replace
+				" it with real new line
+				let g:paras[i] = substitute(g:paras[i], '\%d13', '\n', 'g')
 			endif
-			if fkey != ''
-				let g:fielddb[fkey] = fcontent
-			endif
-			let parlines[j] = substitute(parlines[j], '^\s*:', '<vim:dt class="field">', '')
-			let parlines[j] = substitute(parlines[j], '\(vim\)\@<!:', ':</vim:dt><vim:dd class="field">', '')
-			let parlines[j] .= '</vim:dd>'."\n"
-			let parlines[j] = substitute(parlines[j], '\c\(class="field">\)\(organization\|date\|status\|revision\|version\|dedication\|abstract\|copyright\)', '\1\u\2', 'g')
-			" Adjustments for special types of fields: dedication, abstract
-			" Has to wait for fixing MEDding of field lists
-			let parlines[j] = substitute(parlines[j], 'class="field">Dedication:</vim:dt><vim:dd class="field">', 'class="field fdedication">Dedication</vim:dt><vim:dd class="field fdedication">','')
-			let parlines[j] = substitute(parlines[j], 'class="field">Abstract:</vim:dt><vim:dd class="field">', 'class="field fabstract">Abstract</vim:dt><vim:dd class="field fabstract">','')
-			let j += 1
-		endfor
-		let g:paras[i] = join(parlines, "\n")
-		let g:paras[i] = '<vim:dl class="field'.VST_AddClass(i,0, ' ', '').'">'.g:paras[i]
-		let g:paras[i] = substitute(g:paras[i], '\(Address:</vim:dt><vim:dd class="field">\)\(.\{-}\)</vim:dd>', '\=submatch(1)."<vim:pre class=\"address\">".substitute(submatch(2), "\\(^\\|\\n\\)\\s\\+", "\\n", "g")."</vim:pre></vim:dd>"','g')
-		if has('unix')
-			" On unices above substitute leaves ^M intead of new line, replace
-			" it with real new line
-			let g:paras[i] = substitute(g:paras[i], '\%d13', '\n', 'g')
-		endif
-		let g:paras[i] .= '</vim:dl>'
+			let g:paras[i] .= '</vim:dl>'
 
-	endif
-	let i += 1
-endwhile
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Parse meta paragraphs (.. meta::) {{{
 " Loop creates database, it will be parsed in exports accordingly to its
 " syntax
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'meta'
-		let parlines = split(g:paras[i], '\(^\s*\|\n\s*\):\@=')
-		let j = 0
-		for parline in parlines
-			let mkey = tolower(matchstr(parlines[j], '^\s*:\zs.\{-}\ze:'))
-			let mcontent = matchstr(parlines[j], '^\s*:.\{-}:\s*\zs.*')
-			if mkey != ''
-				let g:metadb[mkey] = mcontent
-			endif
-			let j += 1
-		endfor
-		let g:paras[i] = ''
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'meta'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'meta'
+			let parlines = split(g:paras[i], '\(^\s*\|\n\s*\):\@=')
+			let j = 0
+			for parline in parlines
+				let mkey = tolower(matchstr(parlines[j], '^\s*:\zs.\{-}\ze:'))
+				let mcontent = matchstr(parlines[j], '^\s*:.\{-}:\s*\zs.*')
+				if mkey != ''
+					let g:vst_metadb[mkey] = mcontent
+				endif
+				let j += 1
+			endfor
+			let g:paras[i] = ''
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create image paragraphs (.. image::) {{{
-let i = 0
-while i < len(g:paras)-1 
-	if g:ptype[i] == 'img'
-		let g:paras[i] = VST_ImagePar(g:paras[i], 1)
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'img'"
+	let i = 0
+	while i < len(g:paras)-1 
+		if g:ptype[i] == 'img'
+			let g:paras[i] = VST_ImagePar(g:paras[i], 1)
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create comment paragraph - comment (.. comment::) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'comment'
-		let g:paras[i] = '<vim:comment>'.substitute(g:paras[i], '^\s*\.\. comment::', '', '').'</vim:comment>'
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'comment'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'comment'
+			let g:paras[i] = '<vim:comment>'.substitute(g:paras[i], '^\s*\.\. comment::', '', '').'</vim:comment>'
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create rubric paragraph (.. rubric::) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'rubric'
-		if g:paras[i] =~ ':class:'
-			let class = matchstr(g:paras[i], ':class:\s*\zs.*\ze\s*$')
-			let g:paras[i] = substitute(g:paras[i], '\s*:class:.*$', '', '')
-			let g:paras[i] = '<vim:rubric class="'.class.'">'.substitute(g:paras[i], '\s*\.\. rubric::', '', '').'</vim:rubric>'
-		else
-			let g:paras[i] = '<vim:rubric'.VST_AddClass(i, 1, ' ', '').'>'.substitute(g:paras[i], '\s*\.\. rubric::', '', '').'</vim:rubric>'
+if string(g:ptype) =~ "'rubric'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'rubric'
+			if g:paras[i] =~ ':class:'
+				let class = matchstr(g:paras[i], ':class:\s*\zs.*\ze\s*$')
+				let g:paras[i] = substitute(g:paras[i], '\s*:class:.*$', '', '')
+				let g:paras[i] = '<vim:rubric class="'.class.'">'.substitute(g:paras[i], '\s*\.\. rubric::', '', '').'</vim:rubric>'
+			else
+				let g:paras[i] = '<vim:rubric'.VST_AddClass(i, 1, ' ', '').'>'.substitute(g:paras[i], '\s*\.\. rubric::', '', '').'</vim:rubric>'
+			endif
 		endif
-	endif
-	let i += 1
-endwhile
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create ul paragraph {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'uli'
-		" LISTDEF:
-		" Detect style of unordered list
-		let style = matchstr(g:paras[i], '^\s*\zs'.s:vst_bulletdef.'\s\+')
-		let listindent = strlen(matchstr(g:paras[i], '^\s*\zs'.s:vst_bulletdef.'\s\+'))
-		if style =~ '+'
-			let ustyle = 'square'
-		elseif style =~ '\*'
-			let ustyle = 'circle'
-		elseif style =~ '-'
-			let ustyle = 'disc'
-		else
-			let ustyle = 'disc'
-		endif
-		let j = i + 1
-		while j < len(g:paras)
-			if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank' || g:ptype[j] == 'hr'
-				let newind = repeat(' ', g:pindent[j])
-				call insert(g:paras, newind.'</vim:li>'."\n".newind.'</vim:ul class="'.ustyle.VST_AddClass(i,0,' ','').'">', j)
-				call insert(g:pindent, g:pindent[i], j)
-				call insert(g:ptype, 'ulend', j)
-				call insert(g:plinen, 0, j)
-
-				call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:ul class="'.ustyle.VST_AddClass(i,0,' ','').'">', i)
-				call insert(g:pindent, g:pindent[i], i)
-				call insert(g:ptype, 'ulbegin', i)
-				call insert(g:plinen, 0, i)
-
-				" Recompensate inserted paragraph before current position.
-				let i += 1
-
-				break
+if string(g:ptype) =~ "'uli'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'uli'
+			" LISTDEF:
+			" Detect style of unordered list
+			let style = matchstr(g:paras[i], '^\s*\zs'.s:vst_bulletdef.'\s\+')
+			let listindent = strlen(matchstr(g:paras[i], '^\s*\zs'.s:vst_bulletdef.'\s\+'))
+			if style =~ '+'
+				let ustyle = 'square'
+			elseif style =~ '\*'
+				let ustyle = 'circle'
+			elseif style =~ '-'
+				let ustyle = 'disc'
 			else
-				if g:ptype[j] == 'blockquote'
-					if g:pindent[j] == g:pindent[i] + listindent
-						let g:ptype[j] = 'p'
-					endif
-				endif
-
+				let ustyle = 'disc'
 			endif
-			let j += 1
-		endwhile
-		
-		if ustyle == 'disc'
-			" Potential danger: this also includes * and +
-			let elements = split(g:paras[i], '\(^\|\n\)\s*[\u2022\u2023\u2043\u204c\u204d\u25d8\u25e6\u2619\u2765\u2767-]\s\+')
-		elseif ustyle == 'circle'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*\*\s\+')
-		elseif ustyle == 'square'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*+\s\+')
-		endif
-		for inc in range(len(elements))
-let s:vst_bulletdef = '[\u2022\u2023\u2043\u204c\u204d\u25d8\u25e6\u2619\u2765\u2767*+-]'
-			let elements[inc] = substitute(elements[inc], '\n\s*', '\n', 'g')
-			let elements[inc] = VST_Structure(split(elements[inc], "\n"))
-		endfor
-		let g:paras[i] = '<vim:li>'.join(elements, "</vim:li>\n<vim:li>")
+			let j = i + 1
+			while j < len(g:paras)
+				if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank' || g:ptype[j] == 'hr'
+					let newind = repeat(' ', g:pindent[j])
+					call insert(g:paras, newind.'</vim:li>'."\n".newind.'</vim:ul class="'.ustyle.VST_AddClass(i,0,' ','').'">', j)
+					call insert(g:pindent, g:pindent[i], j)
+					call insert(g:ptype, 'ulend', j)
+					call insert(g:plinen, 0, j)
 
-	endif
-let i += 1
-endwhile
+					call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:ul class="'.ustyle.VST_AddClass(i,0,' ','').'">', i)
+					call insert(g:pindent, g:pindent[i], i)
+					call insert(g:ptype, 'ulbegin', i)
+					call insert(g:plinen, 0, i)
+
+					" Recompensate inserted paragraph before current position.
+					let i += 1
+
+					break
+				else
+					if g:ptype[j] == 'blockquote'
+						if g:pindent[j] == g:pindent[i] + listindent
+							let g:ptype[j] = 'p'
+						endif
+					endif
+
+				endif
+				let j += 1
+			endwhile
+			
+			if ustyle == 'disc'
+				" Potential danger: this also includes * and +
+				let elements = split(g:paras[i], '\(^\|\n\)\s*[\u2022\u2023\u2043\u204c\u204d\u25d8\u25e6\u2619\u2765\u2767-]\s\+')
+			elseif ustyle == 'circle'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*\*\s\+')
+			elseif ustyle == 'square'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*+\s\+')
+			endif
+			for inc in range(len(elements))
+	let s:vst_bulletdef = '[\u2022\u2023\u2043\u204c\u204d\u25d8\u25e6\u2619\u2765\u2767*+-]'
+				let elements[inc] = substitute(elements[inc], '\n\s*', '\n', 'g')
+				let elements[inc] = VST_Structure(split(elements[inc], "\n"))
+			endfor
+			let g:paras[i] = '<vim:li>'.join(elements, "</vim:li>\n<vim:li>")
+
+		endif
+	let i += 1
+	endwhile
+endif
 " }}}
 " Create ol paragraph {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'oli'
-		" Detect style of ordered list
-		" LISTDEF:
-		let style = matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[a-zA-Z]\|[icdvlmxICDVLMX]\+\|#\)\ze[\]:.)}]\s*')
-		let listindent = strlen(matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[a-zA-Z]\|[icdvlmxICDVLMX]\+\|#\)[\]:.)}]\s*'))
-		if style =~ '^\(I\|[ICDVLMX]\{2,}\)$'
-			let ostyle = 'upperroman'
-		elseif style =~ '^\(i\|[icdvlmx]\{2,}\)$'
-			let ostyle = 'lowerroman'
-		elseif style =~ '[a-z]'
-			let ostyle = 'loweralpha'
-		elseif style =~ '[A-Z]'
-			let ostyle = 'upperalpha'
-		elseif style =~ '[0-9#]'
-			let ostyle = 'decimal'
-		endif
-		let j = i + 1
-		while j < len(g:paras)
-			if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank' || g:ptype[j] == 'hr'
-				call insert(g:paras, repeat(' ' , g:pindent[j]).'</vim:li>'.repeat(' ' , g:pindent[j]).'</vim:ol class="'.ostyle.VST_AddClass(i,0,' ','').'">', j)
-				call insert(g:pindent, g:pindent[i], j)
-				call insert(g:ptype, 'olend', j)
-				call insert(g:plinen, 0, j)
+if string(g:ptype) =~ "'oli'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'oli'
+			" Detect style of ordered list
+			" LISTDEF:
+			let style = matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[a-zA-Z]\|[icdvlmxICDVLMX]\+\|#\)\ze[\]:.)}]\s*')
+			let listindent = strlen(matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[a-zA-Z]\|[icdvlmxICDVLMX]\+\|#\)[\]:.)}]\s*'))
+			if style =~ '^\(I\|[ICDVLMX]\{2,}\)$'
+				let ostyle = 'upperroman'
+			elseif style =~ '^\(i\|[icdvlmx]\{2,}\)$'
+				let ostyle = 'lowerroman'
+			elseif style =~ '[a-z]'
+				let ostyle = 'loweralpha'
+			elseif style =~ '[A-Z]'
+				let ostyle = 'upperalpha'
+			elseif style =~ '[0-9#]'
+				let ostyle = 'decimal'
+			endif
+			let j = i + 1
+			while j < len(g:paras)
+				if g:pindent[j] <= g:pindent[i] || g:ptype[j] == 'blank' || g:ptype[j] == 'hr'
+					call insert(g:paras, repeat(' ' , g:pindent[j]).'</vim:li>'.repeat(' ' , g:pindent[j]).'</vim:ol class="'.ostyle.VST_AddClass(i,0,' ','').'">', j)
+					call insert(g:pindent, g:pindent[i], j)
+					call insert(g:ptype, 'olend', j)
+					call insert(g:plinen, 0, j)
 
-				" Get number of first element
-				" LISTDEF:
-				let start = tolower(matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[icdvlmxICDVLMX]\+\|[a-zA-Z]\|#\)\ze'))
-				if start == '1' || start == 'a' || start == '#' || start == 'i'
-					let number = ''
-				elseif start =~ '[0-9]'
-					let number = ' start="'.start.'"'
-				elseif start =~ '[icdvlmx][icdvlmx]'
-					let rtable = split(start, '\ze.')
-					let j = 0
-					while j < len(rtable)
-						if rtable[j] == 'i'
-							let rtable[j] = 1
-						elseif rtable[j] == 'v'
-							let rtable[j] = 5
-						elseif rtable[j] == 'x'
-							let rtable[j] = 10
-						elseif rtable[j] == 'l'
-							let rtable[j] = 50
-						elseif rtable[j] == 'c'
-							let rtable[j] = 100
-						elseif rtable[j] == 'd'
-							let rtable[j] = 500
-						elseif rtable[j] == 'm'
-							let rtable[j] = 1000
-						endif
-						let j += 1
-					endwhile
-					let j = 0
-					while j < len(rtable)
-						if get(rtable, j+1) != 0 && rtable[j] < rtable[j+1]
-							let rtable[j] = rtable[j] * -1
-						endif
-						let j += 1
-					endwhile
-					
-					exe 'let total = '.join(rtable, '+')
-					let number = ' start="'.total.'"'
+					" Get number of first element
+					" LISTDEF:
+					let start = tolower(matchstr(g:paras[i], '^\s*(\?\zs\(\d\+\|[icdvlmxICDVLMX]\+\|[a-zA-Z]\|#\)\ze'))
+					if start == '1' || start == 'a' || start == '#' || start == 'i'
+						let number = ''
+					elseif start =~ '[0-9]'
+						let number = ' start="'.start.'"'
+					elseif start =~ '[icdvlmx][icdvlmx]'
+						let rtable = split(start, '\ze.')
+						let j = 0
+						while j < len(rtable)
+							if rtable[j] == 'i'
+								let rtable[j] = 1
+							elseif rtable[j] == 'v'
+								let rtable[j] = 5
+							elseif rtable[j] == 'x'
+								let rtable[j] = 10
+							elseif rtable[j] == 'l'
+								let rtable[j] = 50
+							elseif rtable[j] == 'c'
+								let rtable[j] = 100
+							elseif rtable[j] == 'd'
+								let rtable[j] = 500
+							elseif rtable[j] == 'm'
+								let rtable[j] = 1000
+							endif
+							let j += 1
+						endwhile
+						let j = 0
+						while j < len(rtable)
+							if get(rtable, j+1) != 0 && rtable[j] < rtable[j+1]
+								let rtable[j] = rtable[j] * -1
+							endif
+							let j += 1
+						endwhile
+						
+						exe 'let total = '.join(rtable, '+')
+						let number = ' start="'.total.'"'
+					else
+						let number = ' start="'.(char2nr(start)-96).'"'
+					endif
+
+					call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:ol class="'.ostyle.VST_AddClass(i,0,' ','').'"'.number.'>', i)
+					call insert(g:pindent, g:pindent[i], i)
+					call insert(g:ptype, 'olbegin', i)
+					call insert(g:plinen, 0, i)
+
+					" Recompensate inserted paragraph before current position.
+					let i += 1
+
+					break
 				else
-					let number = ' start="'.(char2nr(start)-96).'"'
-				endif
-
-				call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:ol class="'.ostyle.VST_AddClass(i,0,' ','').'"'.number.'>', i)
-				call insert(g:pindent, g:pindent[i], i)
-				call insert(g:ptype, 'olbegin', i)
-				call insert(g:plinen, 0, i)
-
-				" Recompensate inserted paragraph before current position.
-				let i += 1
-
-				break
-			else
-				if g:ptype[j] == 'blockquote'
-					if g:pindent[j] == g:pindent[i] + listindent
-						let g:ptype[j] = 'p'
+					if g:ptype[j] == 'blockquote'
+						if g:pindent[j] == g:pindent[i] + listindent
+							let g:ptype[j] = 'p'
+						endif
 					endif
 				endif
+				let j += 1
+			endwhile
+
+			" LISTDEF:
+			
+			let space = matchstr(g:paras[i], '^\s*')
+			if ostyle == 'upperroman'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*(\?\(I\|[ICDVLMX]\{2,}\|#\)[\]:.)}]\s*')
+			elseif ostyle == 'lowerroman'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*(\?\(i\|[icdvlmx]\{2,}\|#\)[\]:.)}]\s*')
+			elseif ostyle == 'loweralpha'
+				" Allow max 2 characters for "head" of alpha lists. It will give
+				" enough combinations withoug allowing for messing with content
+				let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[a-z#]\{,2}[\]:.)}]\s*')
+			elseif ostyle == 'upperalpha'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[A-Z#]\{,2}[\]:.)}]\s*')
+			elseif ostyle == 'decimal'
+				let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[0-9#]\+[\]:.)}]\s*') 
 			endif
-			let j += 1
-		endwhile
+			for inc in range(len(elements))
+				let elements[inc] = substitute(elements[inc], '\n\s*', '\n', 'g')
+				let elements[inc] = VST_Structure(split(elements[inc], "\n"))
+			endfor
+			let g:paras[i] = '<vim:li>'.join(elements, "</vim:li>\n<vim:li>")
 
-		" LISTDEF:
-		
-		let space = matchstr(g:paras[i], '^\s*')
-		if ostyle == 'upperroman'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*(\?\(I\|[ICDVLMX]\{2,}\|#\)[\]:.)}]\s*')
-		elseif ostyle == 'lowerroman'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*(\?\(i\|[icdvlmx]\{2,}\|#\)[\]:.)}]\s*')
-		elseif ostyle == 'loweralpha'
-			" Allow max 2 characters for "head" of alpha lists. It will give
-			" enough combinations withoug allowing for messing with content
-			let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[a-z#]\{,2}[\]:.)}]\s*')
-		elseif ostyle == 'upperalpha'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[A-Z#]\{,2}[\]:.)}]\s*')
-		elseif ostyle == 'decimal'
-			let elements = split(g:paras[i], '\(^\|\n\)\s*(\?[0-9#]\+[\]:.)}]\s*') 
 		endif
-		for inc in range(len(elements))
-			let elements[inc] = substitute(elements[inc], '\n\s*', '\n', 'g')
-			let elements[inc] = VST_Structure(split(elements[inc], "\n"))
-		endfor
-		let g:paras[i] = '<vim:li>'.join(elements, "</vim:li>\n<vim:li>")
-
-	endif
-let i += 1
-endwhile
+	let i += 1
+	endwhile
+endif
 " }}}
 " Create internal anchors - intlink (.. _blah blah:){{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'intlink'
-		let title = tolower(matchstr(g:paras[i], '^\s*\.\. _\zs.\{-}\ze:'))
-		let title = VST_IdMaker(title)
-		let g:paras[i] = "\n".'<vim:p id="l'.title.'"></vim:p>'."\n"
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'intlink'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'intlink'
+			" Testing for links broken into multiple lines
+			if len(substitute(g:paras[i], '^\s*\.\. _.\{-}:\_s*', '', '')) == 0
+				let title = tolower(matchstr(g:paras[i], '^\s*\.\. _\zs.\{-}\ze:'))
+				let g:paras[i] = "\n".'<vim:p id="l'.VST_IdMaker(title).'"></vim:p>'."\n"
+			else
+				let g:paras[i] = ''
+			endif
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create table of contents - toc (.. contents::) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'toc'
-		let b:IsTOC = 1
-		if matchstr(g:paras[i], '\n\s*:depth:') != ''
-			" This juggling is necessary to make corrections on different
-			" treating of TOC levels in LaTeX and HTML.
-			let depth = matchstr(g:paras[i], '\n\s*:depth:\s*\zs\d\+\ze') + 1
-			let s:vst_tocdepth = depth - 1
-			let g:paras[i] = substitute(g:paras[i], '\s*:depth:.\{-}\(\n\|$\)', '', 'g')
-		endif
-		if matchstr(g:paras[i], '\n\s*:class:') != ''
-			let tocclass = 'toc '.VST_IdMaker(matchstr(g:paras[i], '\n\s*:class:\s*\zs.\{-1,}\ze\s*\(\n\|$\)'))
-			let g:paras[i] = substitute(g:paras[i], '\s*:class:.\{-}\(\n\|$\)', '', 'g')
-		else
-			let tocclass = 'toc'
-		endif
-		if matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)') != ''
-			" Alternative title of toc
-			let toc = '<vim:p id="tocheader" class="'.tocclass.'">'.matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)')."<\/vim:p>\n"
-		else
-			let toc = "<vim:p id=\"tocheader\" class=\"".tocclass."\">Contents<\/vim:p>\n"
-		endif
-		let toc .= "<vim:ul class=\"".tocclass."\">\n"
-		let j = 0
-		while j < len(g:paras)
-			if g:ptype[j] =~ '^h\d'
-				let hdepth = strpart(g:ptype[j], '1')
-				if exists('depth') && depth != ''
-					if hdepth > depth
-						let j += 1
-						continue
-					endif
-				endif
-				let g:paras[j] = VST_SpecCharacter(g:paras[j])
-				let stitle = matchstr(g:paras[j], '^\s*\zs.*\ze\n')
-				let htitle = VST_IdMaker(tolower(stitle))
-				let tocli = repeat(' ', hdepth).'<vim:li class="'.g:ptype[j].'" id="toc-l'.htitle.'"><vim:a href="#l'.htitle.'">'.stitle.'</vim:a></vim:li>'
-				let toc .= tocli."\n"
+if string(g:ptype) =~ "'toc'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'toc'
+			let b:IsTOC = 1
+			if matchstr(g:paras[i], '\n\s*:depth:') != ''
+				" This juggling is necessary to make corrections on different
+				" treating of TOC levels in LaTeX and HTML.
+				let depth = matchstr(g:paras[i], '\n\s*:depth:\s*\zs\d\+\ze') + 1
+				let s:vst_tocdepth = depth - 1
+				let g:paras[i] = substitute(g:paras[i], '\s*:depth:.\{-}\(\n\|$\)', '', 'g')
 			endif
-			let j += 1
-		endwhile
-		let toc .= "<\/vim:ul class=\"toc\">\n<vim:!--.. comment:: end of toc -->"
-		let g:paras[i] = toc
-	endif
-	let i += 1
-endwhile
+			if matchstr(g:paras[i], '\n\s*:class:') != ''
+				let tocclass = 'toc '.VST_IdMaker(matchstr(g:paras[i], '\n\s*:class:\s*\zs.\{-1,}\ze\s*\(\n\|$\)'))
+				let g:paras[i] = substitute(g:paras[i], '\s*:class:.\{-}\(\n\|$\)', '', 'g')
+			else
+				let tocclass = 'toc'
+			endif
+			if matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)') != ''
+				" Alternative title of toc
+				let toc = '<vim:p id="tocheader" class="'.tocclass.'">'.matchstr(g:paras[i], '::\s*\zs.\{-}\ze\(\n\|$\)')."<\/vim:p>\n"
+			else
+				let toc = "<vim:p id=\"tocheader\" class=\"".tocclass."\">Contents<\/vim:p>\n"
+			endif
+			let toc .= "<vim:ul class=\"".tocclass."\">\n"
+			let j = 0
+			while j < len(g:paras)
+				if g:ptype[j] =~ '^h\d'
+					let hdepth = strpart(g:ptype[j], '1')
+					if exists('depth') && depth != ''
+						if hdepth > depth
+							let j += 1
+							continue
+						endif
+					endif
+					let g:paras[j] = VST_SpecCharacter(g:paras[j])
+					let stitle = matchstr(g:paras[j], '^\s*\zs.*\ze\n')
+					let htitle = VST_IdMaker(tolower(stitle))
+					let tocli = repeat(' ', hdepth).'<vim:li class="'.g:ptype[j].'" id="toc-l'.htitle.'"><vim:a href="#l'.htitle.'">'.stitle.'</vim:a></vim:li>'
+					let toc .= tocli."\n"
+				endif
+				let j += 1
+			endwhile
+			let toc .= "<\/vim:ul class=\"toc\">\n<vim:!--.. comment:: end of toc -->"
+			let g:paras[i] = toc
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create h[1-6] paragraphs {{{
 let i = 0
@@ -1961,278 +2012,296 @@ while i < len(g:paras)
 endwhile
 " }}}
 " Create document title (.. title::) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'title'
-		let g:vst_doc_title = substitute(g:paras[i], '^\s*\.\. title::\s*', '', '')
-		let g:paras[i] = ''
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'title'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'title'
+			let g:vst_doc_title = substitute(g:paras[i], '^\s*\.\. title::\s*', '', '')
+			let g:paras[i] = ''
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create verse paragraphs ("| ") {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'verse'
-		let g:paras[i] = VST_SpecCharacter(g:paras[i])
-		let g:paras[i] = VST_CreateVerse(g:paras[i])
+if string(g:ptype) =~ "'verse'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'verse'
+			let g:paras[i] = VST_SpecCharacter(g:paras[i])
+			let g:paras[i] = VST_CreateVerse(g:paras[i])
 
-		let g:paras[i] = substitute(g:paras[i], '<vim:p class="verse', '\0'.VST_AddClass(i,0, ' ',''), '')
-	endif
-	let i += 1
-endwhile
+			let g:paras[i] = substitute(g:paras[i], '<vim:p class="verse', '\0'.VST_AddClass(i,0, ' ',''), '')
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create raw LaTeX paragraph (next after .. raw:: latex) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'rawlatexcontent'
-		let class = VST_AddClass(i,1, ' ', '')
-		let g:paras[i] = "<vim:rawlatex".class.">\n".VST_ProtectLiteral(g:paras[i])."\n</vim:rawlatex>"
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'rawlatexcontent'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'rawlatexcontent'
+			let class = VST_AddClass(i,1, ' ', '')
+			let g:paras[i] = "<vim:rawlatex".class.">\n".VST_ProtectLiteral(g:paras[i])."\n</vim:rawlatex>"
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create raw HTML paragraph (next after .. raw:: html) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'rawhtmlcontent'
-		let g:paras[i] = "<vim:rawhtml>\n".VST_ProtectLiteral(g:paras[i])."\n</vim:rawhtml>"
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'rawhtmlcontent'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'rawhtmlcontent'
+			let g:paras[i] = "<vim:rawhtml>\n".VST_ProtectLiteral(g:paras[i])."\n</vim:rawhtml>"
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create raw both paragraph (next after .. raw:: <both>) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'rawbothcontent'
-		let g:paras[i] = "<vim:rawboth>\n".g:paras[i]."\n</vim:rawboth>"
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'rawbothcontent'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'rawbothcontent'
+			let g:paras[i] = "<vim:rawboth>\n".g:paras[i]."\n</vim:rawboth>"
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create LaTeX only paragraph - latexonly (.. raw:: latex) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'latexonly'
-		let g:paras[i] = substitute(g:paras[i], '\(\s*\)$', '\n\1</vim:latexonly>', '')
-		let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. latexonly::\s*\n', '\n\1<vim:latexonly>\n', '')
-		let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. latexonly::', '\n\1<vim:latexonly>\n', '')
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'latexonly'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'latexonly'
+			let g:paras[i] = substitute(g:paras[i], '\(\s*\)$', '\n\1</vim:latexonly>', '')
+			let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. latexonly::\s*\n', '\n\1<vim:latexonly>\n', '')
+			let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. latexonly::', '\n\1<vim:latexonly>\n', '')
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create HTML only paragraph - htmlonly (.. raw:: html) {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'htmlonly'
-		let g:paras[i] = substitute(g:paras[i], '\(\s*\)$', '\n\1</vim:htmlonly>', '')
-		let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. htmlonly::\s*\n', '\n\1<vim:htmlonly>\n', '')
-		let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. htmlonly::', '\n\1<vim:htmlonly>\n', '')
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'htmlonly'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'htmlonly'
+			let g:paras[i] = substitute(g:paras[i], '\(\s*\)$', '\n\1</vim:htmlonly>', '')
+			let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. htmlonly::\s*\n', '\n\1<vim:htmlonly>\n', '')
+			let g:paras[i] = substitute(g:paras[i], '^\(\s*\)\.\. htmlonly::', '\n\1<vim:htmlonly>\n', '')
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Check and embrace paragraphs in blockquote tags {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'blockquote'
-		let j = i + 1
-		while j < len(g:paras)
-			let noteindent = g:pindent[j] - g:pindent[i]
-			if g:pindent[i] > g:pindent[j]  || g:ptype[j] == 'blank' || g:ptype[j] == 'notend'
-				call insert(g:paras, repeat(' ' , g:pindent[i]).'</vim:blockquote>', j)
-				call insert(g:pindent, g:pindent[i], j)
-				call insert(g:ptype, 'blockend', j)
-				call insert(g:plinen, 0, j)
+if string(g:ptype) =~ "'blockquote'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'blockquote'
+			let j = i + 1
+			while j < len(g:paras)
+				let noteindent = g:pindent[j] - g:pindent[i]
+				if g:pindent[i] > g:pindent[j]  || g:ptype[j] == 'blank' || g:ptype[j] == 'notend'
+					call insert(g:paras, repeat(' ' , g:pindent[i]).'</vim:blockquote>', j)
+					call insert(g:pindent, g:pindent[i], j)
+					call insert(g:ptype, 'blockend', j)
+					call insert(g:plinen, 0, j)
 
-				call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:blockquote'.VST_AddClass(i,1,' ', '').'>', i)
-				call insert(g:pindent, g:pindent[i], i)
-				call insert(g:ptype, 'blockbegin', i)
-				call insert(g:plinen, 0, i)
+					call insert(g:paras, repeat(' ' , g:pindent[i]).'<vim:blockquote'.VST_AddClass(i,1,' ', '').'>', i)
+					call insert(g:pindent, g:pindent[i], i)
+					call insert(g:ptype, 'blockbegin', i)
+					call insert(g:plinen, 0, i)
 
-				" Recompensate inserted paragraph before current position.
-				let i += 1
+					" Recompensate inserted paragraph before current position.
+					let i += 1
 
-				" Region embraced , now I have to take care about paragraph
-				let g:ptype[i] = 'p'
+					" Region embraced , now I have to take care about paragraph
+					let g:ptype[i] = 'p'
 
-				break
+					break
 
-			endif
-			let j += 1
-		endwhile
-	endif
-let i += 1
-endwhile
+				endif
+				let j += 1
+			endwhile
+		endif
+	let i += 1
+	endwhile
+endif
 " }}}
 " Create table {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] =~ 'table'
-		let g:tclen = []
-		let g:thash = {}
-		let g:tabb = []
-		let g:taba = []
+if string(g:ptype) =~ "'table'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] =~ 'table'
+			let g:tclen = []
+			let g:thash = {}
+			let g:tabb = []
+			let g:taba = []
 
-		let lines = split(g:paras[i], '\n')
-		let newrow = 0
-		unlet! trow
+			let lines = split(g:paras[i], '\n')
+			let newrow = 0
+			unlet! trow
 
-		let line_count = 0
-		let headfoot_counter = 0
-		unlet! usedthead
-		unlet! usedtfoot 
+			let line_count = 0
+			let headfoot_counter = 0
+			unlet! usedthead
+			unlet! usedtfoot 
 
-		for line in lines
-			let row = substitute(line, '^\s*\|\s*$', '', 'g')
-			if row =~ '^+'
-				if exists('trow')
+			for line in lines
+				let row = substitute(line, '^\s*\|\s*$', '', 'g')
+				if row =~ '^+'
+					if exists('trow')
 
-					let g:tabb += [deepcopy(trow)]
+						let g:tabb += [deepcopy(trow)]
 
-					let rl = 0
-					while rl < len(trow)
-						let trow[rl] = VST_SpecCharacter(trow[rl])
-						let cell = split(trow[rl], "\n")
-						let trow[rl] = VST_Structure(cell)
-						let rl += 1
-					endwhile
-					
-					let g:taba += [trow]
+						let rl = 0
+						while rl < len(trow)
+							let trow[rl] = VST_SpecCharacter(trow[rl])
+							let cell = split(trow[rl], "\n")
+							let trow[rl] = VST_Structure(cell)
+							let rl += 1
+						endwhile
+						
+						let g:taba += [trow]
 
-				endif
-				if row =~ '^+=' && line_count > 0
-					let headfoot_counter += 1
-				endif
-				" Add head/foot structure elements to the end of last cell in
-				" row. Later switch order of elements by regexps.
-				if headfoot_counter > 0 && !exists('usedthead') && !exists('usedtfoot')
-					let g:taba[-1][-1] .= '</vim:thead>'
-					let usedthead = 1
-				endif
-				if headfoot_counter > 1 && !exists('usedtfoot')
-					let g:taba[-1][-1] .= '<vim:tfoot>'
-					let usedtfoot = 1
-				endif
-				let g:hf = headfoot_counter
-				let newrow = 1
-				let g:thash[len(split(row, '+'))] = split(row, '+')
-				continue
-			else
-				if newrow == 1
-					let trow = split(row, '\(^\| \)|\( \|$\)')
-					let newrow = 0
-				else
-					let tmprow = split(row, '\(^\| \)|\( \|$\)')
-					let rl = 0
-					while rl < len(tmprow)
-						let trow[rl] .= "\n".tmprow[rl]
-						let rl += 1
-					endwhile
-				endif
-			endif
-			let line_count += 1
-		endfor
-
-
-		" Get lengths of most standard cells in table, need this for testing
-		" of cells for length if they are longer
-		let g:tstandard = g:thash[max(keys(g:thash))]
-		let tl = 0
-		while tl < len(g:tstandard)
-			let g:tclen += [len(g:tstandard[tl])]
-			let tl += 1
-		endwhile
-
-		" Check relative sizes of table columns
-		" I need this to declare widths of columns in LaTeX export
-		exe 'let g:sum = '.join(g:tclen, '+')
-		let g:sizes = []
-		for col in g:tclen
-			let colwidth = col*90/g:sum
-			if len(colwidth) == 1
-				let colwidth = '0'.colwidth
-			endif
-			let g:sizes += [colwidth]
-		endfor
-
-		" insertion of columns size for proper breaking of text in table cells
-		let colnumber = join(g:sizes, '+').'+'
-
-		let tl = 0
-		let g:ctable = ''
-		while tl < len(g:tabb)
-			let trow = g:tabb[tl]
-			let g:ctable .= '<vim:tr>'
-			let cn = 0
-			let tcc = cn
-			while cn < len(trow)
-				let cll = trow[cn]
-				if stridx(cll, "\n") != -1
-					let g:celllength = strlen(matchstr(cll, '^.\{-}\ze\n')) + 2
-				else
-					let g:celllength = strlen(cll) + 2
-				endif
-				let k = 0
-				let tempst = 0
-				while 1
-					if k < 2
-						let tempst += g:tclen[tcc+k] + k
-					else
-						let tempst += g:tclen[tcc+k] + 1
 					endif
-					if g:celllength == tempst
-						if k > 0
-							let tccplus = tcc + k
-							exe 'let g:summa = '.join(g:sizes[tcc : tccplus], '+')
-							if exists("g:vst_center_multicol") && g:vst_center_multicol != 1
-								let g:ctable .= "<vim:td colspan=\"".(k+1)."\" summary=\"".g:summa."\">".g:taba[tl][cn]."</vim:td>"
-							else
-								let g:ctable .= "<vim:td colspan=\"".(k+1)."\" style=\"text-align: center;\" summary=\"".g:summa."\">".g:taba[tl][cn]."</vim:td>"
-							endif
-						else
-							let g:ctable .= "<vim:td>".g:taba[tl][cn]."</vim:td>"
-						endif
-						let tcc += k
-						break
-					else
-						let k += 1
-						continue
+					if row =~ '^+=' && line_count > 0
+						let headfoot_counter += 1
 					endif
-				endwhile
-				let tcc += 1
-				let cn += 1
+					" Add head/foot structure elements to the end of last cell in
+					" row. Later switch order of elements by regexps.
+					if headfoot_counter > 0 && !exists('usedthead') && !exists('usedtfoot')
+						let g:taba[-1][-1] .= '</vim:thead>'
+						let usedthead = 1
+					endif
+					if headfoot_counter > 1 && !exists('usedtfoot')
+						let g:taba[-1][-1] .= '<vim:tfoot>'
+						let usedtfoot = 1
+					endif
+					let g:hf = headfoot_counter
+					let newrow = 1
+					let g:thash[len(split(row, '+'))] = split(row, '+')
+					continue
+				else
+					if newrow == 1
+						let trow = split(row, '\(^\| \)|\( \|$\)')
+						let newrow = 0
+					else
+						let tmprow = split(row, '\(^\| \)|\( \|$\)')
+						let rl = 0
+						while rl < len(tmprow)
+							let trow[rl] .= "\n".tmprow[rl]
+							let rl += 1
+						endwhile
+					endif
+				endif
+				let line_count += 1
+			endfor
+
+
+			" Get lengths of most standard cells in table, need this for testing
+			" of cells for length if they are longer
+			let g:tstandard = g:thash[max(keys(g:thash))]
+			let tl = 0
+			while tl < len(g:tstandard)
+				let g:tclen += [len(g:tstandard[tl])]
+				let tl += 1
 			endwhile
-			let g:ctable .= "\n</vim:tr>"
-			let tl += 1
-		endwhile
+
+			" Check relative sizes of table columns
+			" I need this to declare widths of columns in LaTeX export
+			exe 'let g:sum = '.join(g:tclen, '+')
+			let g:sizes = []
+			for col in g:tclen
+				let colwidth = col*90/g:sum
+				if len(colwidth) == 1
+					let colwidth = '0'.colwidth
+				endif
+				let g:sizes += [colwidth]
+			endfor
+
+			" insertion of columns size for proper breaking of text in table cells
+			let colnumber = join(g:sizes, '+').'+'
+
+			let tl = 0
+			let g:ctable = ''
+			while tl < len(g:tabb)
+				let trow = g:tabb[tl]
+				let g:ctable .= '<vim:tr>'
+				let cn = 0
+				let tcc = cn
+				while cn < len(trow)
+					let cll = trow[cn]
+					if stridx(cll, "\n") != -1
+						let g:celllength = strlen(matchstr(cll, '^.\{-}\ze\n')) + 2
+					else
+						let g:celllength = strlen(cll) + 2
+					endif
+					let k = 0
+					let tempst = 0
+					while 1
+						if k < 2
+							let tempst += g:tclen[tcc+k] + k
+						else
+							let tempst += g:tclen[tcc+k] + 1
+						endif
+						if g:celllength == tempst
+							if k > 0
+								let tccplus = tcc + k
+								exe 'let g:summa = '.join(g:sizes[tcc : tccplus], '+')
+								if exists("g:vst_center_multicol") && g:vst_center_multicol != 1
+									let g:ctable .= "<vim:td colspan=\"".(k+1)."\" summary=\"".g:summa."\">".g:taba[tl][cn]."</vim:td>"
+								else
+									let g:ctable .= "<vim:td colspan=\"".(k+1)."\" style=\"text-align: center;\" summary=\"".g:summa."\">".g:taba[tl][cn]."</vim:td>"
+								endif
+							else
+								let g:ctable .= "<vim:td>".g:taba[tl][cn]."</vim:td>"
+							endif
+							let tcc += k
+							break
+						else
+							let k += 1
+							continue
+						endif
+					endwhile
+					let tcc += 1
+					let cn += 1
+				endwhile
+				let g:ctable .= "\n</vim:tr>"
+				let tl += 1
+			endwhile
 
 
-		" Check if table is borderless
-		if g:ptype[i] == 'bltable'
-			let class = 'vstbless'
-		else
-			let class = 'vstborder'
+			" Check if table is borderless
+			if g:ptype[i] == 'bltable'
+				let class = 'vstbless'
+			else
+				let class = 'vstborder'
+			endif
+			" Info about borders is awful abuse of summary...
+			let ttable = "<vim:table class=\"".class.VST_AddClass(i,0,' ','')."\" summary=\"".class."coln".colnumber."\">\n".g:ctable."</vim:table>"
+
+			if headfoot_counter > 0
+				let ttable = substitute(ttable, '<vim:table[^>]*>', '\0\n<vim:thead>', '')
+				let ttable = substitute(ttable, '\(</vim:thead>\)\(</vim:td>\n</vim:tr>\)', '\2\n\1\n', '')
+			endif
+			if headfoot_counter == 2
+				let ttable = substitute(ttable, '<.vim:table>', '</vim:tfoot>\n\0', '')
+				let ttable = substitute(ttable, '\(<vim:tfoot>\)\(</vim:td>\n</vim:tr>\)', '\2\n\1\n', '')
+			endif
+
+			let g:paras[i] = ttable
+
 		endif
-		" Info about borders is awful abuse of summary...
-		let ttable = "<vim:table class=\"".class.VST_AddClass(i,0,' ','')."\" summary=\"".class."coln".colnumber."\">\n".g:ctable."</vim:table>"
-
-		if headfoot_counter > 0
-			let ttable = substitute(ttable, '<vim:table[^>]*>', '\0\n<vim:thead>', '')
-			let ttable = substitute(ttable, '\(</vim:thead>\)\(</vim:td>\n</vim:tr>\)', '\2\n\1\n', '')
-		endif
-		if headfoot_counter == 2
-			let ttable = substitute(ttable, '<.vim:table>', '</vim:tfoot>\n\0', '')
-			let ttable = substitute(ttable, '\(<vim:tfoot>\)\(</vim:td>\n</vim:tr>\)', '\2\n\1\n', '')
-		endif
-
-		let g:paras[i] = ttable
-
-	endif
-	let i += 1
-endwhile
-unlet! trow
-unlet! row
+		let i += 1
+	endwhile
+	unlet! trow
+	unlet! row
+endif
 " }}}
 " Create subtitle paragraphs {{{
 let i = 0
@@ -2249,191 +2318,195 @@ while i < len(g:paras)
 endwhile
 " }}}
 " Doctest paragraphs {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] == 'doctest'
-		let class = VST_AddClass(i,1, ' ', '')
-		let g:paras[i] = VST_SpecCharacter(g:paras[i])
-		let g:paras[i] = "\n".repeat(' ', g:pindent[i])."<vim:pre".class.">\n".g:paras[i]
-		let g:paras[i] .= "\n".repeat(' ', g:pindent[i])."</vim:pre>\n"
-	endif
-	let i += 1
-endwhile
+if string(g:ptype) =~ "'doctest'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] == 'doctest'
+			let class = VST_AddClass(i,1, ' ', '')
+			let g:paras[i] = VST_SpecCharacter(g:paras[i])
+			let g:paras[i] = "\n".repeat(' ', g:pindent[i])."<vim:pre".class.">\n".g:paras[i]
+			let g:paras[i] .= "\n".repeat(' ', g:pindent[i])."</vim:pre>\n"
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Simple table paragraphs {{{
-let i = 0
-while i < len(g:paras)
+if string(g:ptype) =~ "'simpletbl'"
+	let i = 0
+	while i < len(g:paras)
 
-	if g:ptype[i] == 'simpletbl'
+		if g:ptype[i] == 'simpletbl'
 
-		unlet! usedthead
-		unlet! usedtfoot
-		unlet! usethead
+			unlet! usedthead
+			unlet! usedtfoot
+			unlet! usethead
 
-		let plines = split(g:paras[i], '\n')
-		let header = substitute(plines[0], '^\s\+', '', '')
-		" Remove framing === === lines
-		let plines = plines[1:-2]
-		let usethead = 0
-		for j in range(len(plines))
-			let plines[j] = substitute(plines[j], '^\s\{'.g:pindent[i].'}', '', '')
-			if plines[j] =~ '^\(=\{2,}\s*\)\+$'
-				let usethead += 1
-			endif
-		endfor
-		" Get width of cols {{{
-		let cols = []
-		for k in split(header, '[^=]=')
-			let cols += [len(matchstr(header, '^=*\s*'))]
-			let header = substitute(header, '^=*\s*', '', '')
-		endfor
-		" Due to nature of formatting last column may seem narrower than rest.
-		" Add 1 to slightly recompense that.
-		let cols[-1] += 1
-		" Calculate percentage widths of columns.
-		exe 'let total_width = '.join(cols, '+')
-		let sizes = []
-		for col in cols
-			let colwidth = col*90/total_width
-			if len(colwidth) == 1
-				let colwidth = '0'.colwidth
-			endif
-			let sizes += [colwidth]
-		endfor
-		let col_desc = join(sizes, '+').'+'
-		" }}}
-		" Split plines into separate cells {{{
-		let table = []
-		for line in plines
-
-			let trow = []
-
-			for k in range(len(cols))
-				if k == len(cols)-1
-					let trow += [line]
-				else
-					let trow += [line[0:(cols[k]-1)]]
-					let line = line[(cols[k]):]
+			let plines = split(g:paras[i], '\n')
+			let header = substitute(plines[0], '^\s\+', '', '')
+			" Remove framing === === lines
+			let plines = plines[1:-2]
+			let usethead = 0
+			for j in range(len(plines))
+				let plines[j] = substitute(plines[j], '^\s\{'.g:pindent[i].'}', '', '')
+				if plines[j] =~ '^\(=\{2,}\s*\)\+$'
+					let usethead += 1
 				endif
 			endfor
+			" Get width of cols {{{
+			let cols = []
+			for k in split(header, '[^=]=')
+				let cols += [len(matchstr(header, '^=*\s*'))]
+				let header = substitute(header, '^=*\s*', '', '')
+			endfor
+			" Due to nature of formatting last column may seem narrower than rest.
+			" Add 1 to slightly recompense that.
+			let cols[-1] += 1
+			" Calculate percentage widths of columns.
+			exe 'let total_width = '.join(cols, '+')
+			let sizes = []
+			for col in cols
+				let colwidth = col*90/total_width
+				if len(colwidth) == 1
+					let colwidth = '0'.colwidth
+				endif
+				let sizes += [colwidth]
+			endfor
+			let col_desc = join(sizes, '+').'+'
+			" }}}
+			" Split plines into separate cells {{{
+			let table = []
+			for line in plines
 
-			let table += [trow]
+				let trow = []
 
-		endfor
-		" }}}
-		" Now create real, multiline if necessary, cells {{{
-		let rtable = []
-		for k in range(len(table))
+				for k in range(len(cols))
+					if k == len(cols)-1
+						let trow += [line]
+					else
+						let trow += [line[0:(cols[k]-1)]]
+						let line = line[(cols[k]):]
+					endif
+				endfor
 
-			let row = table[k]
+				let table += [trow]
 
-			if k == 0
-				let prevrow = ['-----']
-			else
-				let prevrow = table[k-1]
-			endif
+			endfor
+			" }}}
+			" Now create real, multiline if necessary, cells {{{
+			let rtable = []
+			for k in range(len(table))
 
-			if row[0] =~ '^\s*$'
-				if prevrow[0] =~ '[-=]\{2,}'
+				let row = table[k]
+
+				if k == 0
+					let prevrow = ['-----']
+				else
+					let prevrow = table[k-1]
+				endif
+
+				if row[0] =~ '^\s*$'
+					if prevrow[0] =~ '[-=]\{2,}'
+						let addrow = 0
+					else
+						let addrow = 1
+					endif
+				else
 					let addrow = 0
-				else
-					let addrow = 1
 				endif
-			else
-				let addrow = 0
-			endif
 
-			if addrow == 0
-				let temprow = []
-				for j in range(len(cols))
-					if row[j] !~ '^[=-]\{2,}'
-						let temprow += [row[j]]
-					elseif row[j] =~ '^=\{2,}'
-						let temprow += ['-vst-thfelem-']
-					endif
-				endfor
-				let rtable += [temprow]
-			elseif addrow == 1
-				for j in range(len(cols))
-					if row[j] !~ '^[=-]\{2,}'
-						let temprow[j] .= "\n".row[j]
-					elseif row[j] =~ '^=\{2,}'
-						let temprow += ['-vst-thfelem-']
-					endif
-				endfor
-			endif
-
-		endfor
-		" }}}
-
-		" Translate data structure into Vim reStructured Text markup
-		" Go through cells, call Structure function, join().
-		let class = VST_AddClass(i,0, ' ', '')
-		let g:paras[i] = '<vim:table class="vstborder'.class."\" summary=\"vstbordercoln".col_desc."\">\n"
-
-		" insert thead at the beginning
-		if usethead > 0
-			let g:paras[i] .= "<vim:thead>\n"
-		endif
-			
-		for k in range(len(rtable))
-			let row = rtable[k]
-
-			if row == []
-				let k += 1
-				continue
-			endif
-
-			" Interpret text inside of cells looking for structures {{{
-			for j in range(len(row))
-				if row[j] =~ '^-vst-thfelem-$'
-					let j += 1
-					continue
-				else
-					let row[j] = VST_SpecCharacter(row[j])
-					let cellt = split(row[j], "\n")
-					" Remove in-frontal space from one-line cells to avoid
-					" interpretation of text as blockquote
-					"if len(cellt) == 1
-					"	let cellt[0] = substitute(cellt[0], '^\s\+', '', '')
-					"endif
-					let row[j] = VST_Structure(cellt)
+				if addrow == 0
+					let temprow = []
+					for j in range(len(cols))
+						if row[j] !~ '^[=-]\{2,}'
+							let temprow += [row[j]]
+						elseif row[j] =~ '^=\{2,}'
+							let temprow += ['-vst-thfelem-']
+						endif
+					endfor
+					let rtable += [temprow]
+				elseif addrow == 1
+					for j in range(len(cols))
+						if row[j] !~ '^[=-]\{2,}'
+							let temprow[j] .= "\n".row[j]
+						elseif row[j] =~ '^=\{2,}'
+							let temprow += ['-vst-thfelem-']
+						endif
+					endfor
 				endif
+
 			endfor
 			" }}}
 
-			" Create marked text and add thead and tfoot when appropriate
-			if usethead > 0 && !exists("usedthead") && join(row, '') =~ '^\(-vst-thfelem-\)\+$'
-				let g:paras[i] .= "\n</vim:thead>\n"
-				let usedthead = 1
-				continue
+			" Translate data structure into Vim reStructured Text markup
+			" Go through cells, call Structure function, join().
+			let class = VST_AddClass(i,0, ' ', '')
+			let g:paras[i] = '<vim:table class="vstborder'.class."\" summary=\"vstbordercoln".col_desc."\">\n"
+
+			" insert thead at the beginning
+			if usethead > 0
+				let g:paras[i] .= "<vim:thead>\n"
 			endif
-			if usethead > 1 && exists("usedthead") && join(row, '') =~ '^\(-vst-thfelem-\)\+$'
-				let g:paras[i] .= "\n<vim:tfoot>\n"
-				unlet usedthead
-				let usedtfoot = 1
-				continue
+				
+			for k in range(len(rtable))
+				let row = rtable[k]
+
+				if row == []
+					let k += 1
+					continue
+				endif
+
+				" Interpret text inside of cells looking for structures {{{
+				for j in range(len(row))
+					if row[j] =~ '^-vst-thfelem-$'
+						let j += 1
+						continue
+					else
+						let row[j] = VST_SpecCharacter(row[j])
+						let cellt = split(row[j], "\n")
+						" Remove in-frontal space from one-line cells to avoid
+						" interpretation of text as blockquote
+						"if len(cellt) == 1
+						"	let cellt[0] = substitute(cellt[0], '^\s\+', '', '')
+						"endif
+						let row[j] = VST_Structure(cellt)
+					endif
+				endfor
+				" }}}
+
+				" Create marked text and add thead and tfoot when appropriate
+				if usethead > 0 && !exists("usedthead") && join(row, '') =~ '^\(-vst-thfelem-\)\+$'
+					let g:paras[i] .= "\n</vim:thead>\n"
+					let usedthead = 1
+					continue
+				endif
+				if usethead > 1 && exists("usedthead") && join(row, '') =~ '^\(-vst-thfelem-\)\+$'
+					let g:paras[i] .= "\n<vim:tfoot>\n"
+					unlet usedthead
+					let usedtfoot = 1
+					continue
+				endif
+
+				let g:paras[i] .= '<vim:tr><vim:td>'.join(row, '</vim:td><vim:td>').'</vim:td></vim:tr>'."\n"
+
+
+			endfor
+
+			if exists("usedtfoot")
+				unlet usedtfoot
+				let g:paras[i] .= "\n</vim:tfoot>\n"
 			endif
 
-			let g:paras[i] .= '<vim:tr><vim:td>'.join(row, '</vim:td><vim:td>').'</vim:td></vim:tr>'."\n"
+			unlet! usedthead
+			unlet! usedtfoot
+			unlet! usethead
 
+			let g:paras[i] .= '</vim:table>'
 
-		endfor
-
-		if exists("usedtfoot")
-			unlet usedtfoot
-			let g:paras[i] .= "\n</vim:tfoot>\n"
 		endif
-
-		unlet! usedthead
-		unlet! usedtfoot
-		unlet! usethead
-
-		let g:paras[i] .= '</vim:table>'
-
-	endif
-	let i += 1
-endwhile
+		let i += 1
+	endwhile
+endif
 " }}}
 " Create p paragraph {{{
 let i = 0
@@ -2453,65 +2526,69 @@ while i < len(g:paras)
 endwhile
 " }}}
 " Insert raw files placeholders {{{
-let i = 0
-while i < len(g:paras)
-	if g:ptype[i] =~ '^raw\(latex\|html\|both\)$'
-		if g:paras[i] =~ ':file:'
-			let file = matchstr(g:paras[i], ':file:\s*\zs.*')
-			let g:paras[i] = '-vst-raw-file-placeholder:'.VST_ProtectLiteral(file)
-		else
-			let g:paras[i] = ''
-		endif
-	endif
-	let i += 1
-endwhile
-" }}}
-" Insert MED-classess {{{
-let i = 0
-while i < len(g:paras)
-	if i == len(doc) - 1
-		let nextline = i - 1
-	else
-		let nextline = i + 1
-	endif
-	if g:ptype[i] == 'MED-class' && g:ptype[nextline] != 'notend'
-		let name = g:paras[i]
-		let j = i + 1
-		while j < len(g:paras)
-			if g:ptype[j] == 'notend' && g:pindent[j] == g:pindent[i] && g:paras[j] =~ '^\s*<vim:class'.name
-				let g:paras[j] = ''
-				break
+if string(g:ptype) =~ "'raw\(latex\|html\|both\)'"
+	let i = 0
+	while i < len(g:paras)
+		if g:ptype[i] =~ '^raw\(latex\|html\|both\)$'
+			if g:paras[i] =~ ':file:'
+				let file = matchstr(g:paras[i], ':file:\s*\zs.*')
+				let g:paras[i] = '-vst-raw-file-placeholder:'.VST_ProtectLiteral(file)
 			else
-				if g:ptype[j] !~ '^[uo]li$'
-					let initial = matchstr(g:paras[j], '^\_s*\zs<vim:\w\+[^>]*>')
-					if initial !~ 'class\s*=\s*[''"]'
-						let final = substitute(initial, '\(/\)\?>', ' class="'.name.'" \1>', '')
-					elseif initial =~ 'class\s*=\s*[''"]'
-						let final = substitute(initial, '\(class\s*=\s*\)\([''"]\)\(.\{-}\)\2', '\1\2\3 '.name.'\2', '')
-					endif
-					let g:paras[j] = substitute(g:paras[j], initial, final, '')
-				endif
-				let j += 1
+				let g:paras[i] = ''
 			endif
-		endwhile
-	endif
-	let i += 1
-endwhile
-
-
+		endif
+		let i += 1
+	endwhile
+endif
+" }}}
+" Insert MED-classes {{{
+if string(g:ptype) =~ "'MED-class'"
+	let i = 0
+	while i < len(g:paras)
+		if i == len(doc) - 1
+			let nextline = i - 1
+		else
+			let nextline = i + 1
+		endif
+		if g:ptype[i] == 'MED-class' && g:ptype[nextline] != 'notend'
+			let name = g:paras[i]
+			let j = i + 1
+			while j < len(g:paras)
+				if g:ptype[j] == 'notend' && g:pindent[j] == g:pindent[i] && g:paras[j] =~ '^\s*<vim:class'.name
+					let g:paras[j] = ''
+					break
+				else
+					if g:ptype[j] !~ '^[uo]li$'
+						let initial = matchstr(g:paras[j], '^\_s*\zs<vim:\w\+[^>]*>')
+						if initial !~ 'class\s*=\s*[''"]'
+							let final = substitute(initial, '\(/\)\?>', ' class="'.name.'" \1>', '')
+						elseif initial =~ 'class\s*=\s*[''"]'
+							let final = substitute(initial, '\(class\s*=\s*\)\([''"]\)\(.\{-}\)\2', '\1\2\3 '.name.'\2', '')
+						endif
+						let g:paras[j] = substitute(g:paras[j], initial, final, '')
+					endif
+					let j += 1
+				endif
+			endwhile
+		endif
+		let i += 1
+	endwhile
+endif
 " }}}
 " Nuke auxiliary elements {{{
 let i = 0
 while i < len(g:paras)
 	if g:ptype[i] == 'link'
 		let g:paras[i] = ''
-		"call remove(g:paras, i)
-		"call remove(g:ptype, i)
-		"call remove(g:pindent, i)
-		"call remove(g:plinen, i)
 	elseif g:ptype[i] == 'anonlink'
 		let g:paras[i] = ''
 	elseif g:ptype[i] == 'replacement'
+		let g:paras[i] = ''
+	elseif g:ptype[i] == 'rawhtml'
+		let g:paras[i] = ''
+	elseif g:ptype[i] == 'rawlatex'
+		let g:paras[i] = ''
+	elseif g:ptype[i] == 'rawboth'
 		let g:paras[i] = ''
 	elseif g:ptype[i] == 'emptypre'
 		let g:paras[i] = ''
@@ -2519,11 +2596,6 @@ while i < len(g:paras)
 		let g:paras[i] = ''
 	elseif g:ptype[i] == 'MED-class'
 		let g:paras[i] = ''
-"	elseif g:ptype[i] == 'blank'
-"		call remove(g:paras, i)
-"		call remove(g:ptype, i)
-"		call remove(g:pindent, i)
-"		call remove(g:plinen, i)
 	endif
 	let i += 1
 endwhile
@@ -2531,7 +2603,7 @@ endwhile
 " Create markup {{{
 let i = 0
 while i < len(g:paras)
-	" Careful checking if given construct can exists in paragraph. 
+	" Careful checking if given construct exists in paragraph. 
 	" BIG speed gains.
 	if g:ptype[i] !~ '^pre\|^hr\|^blank'
 		if g:paras[i] =~ '|'
@@ -2597,6 +2669,8 @@ let file = substitute(file, '<vim:pre[^>]\{-}>\n</vim:pre>', '', 'g')
 let file = substitute(file, '<\(vim:\)\?img\([^>]\{-}\)src="<vim:a href=".\{-}">\([^<]*\)</vim:a>"', 
 			\ '<\1img\2src="\3"', 'g')
 " let file = substitute(file, ' 	 	 \n', '', 'g')
+" Remove too much of empty space at the end of footnotes
+let file = substitute(file, '\n\(</vim:div></vim:footnote>\)', '\1', 'g')
 
 
 " }}}
@@ -2640,28 +2714,28 @@ function! VST_DictTable(db, key, value, sort)
 	if a:sort == 0
 		for key in keys(dict)
 			if dict[key] !~ '^\s*$'
-				let itemmargin = valmargin - strlen(key)
-				if itemmargin < 1
-					let table .= key."\n".repeat(' ', valmargin).dict[key]."\n"
+				if valmargin - strlen(key) < 1
+					let table .= key."\n".repeat(' ', valmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				else
-					let table .= key.repeat(' ', itemmargin).dict[key]."\n"
+					let table .= key.repeat(' ', itemmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				endif
 			endif
 		endfor
 	else
 		for key in sort(keys(dict))
 			if dict[key] !~ '^\s*$'
-				let itemmargin = valmargin - strlen(key)
-				if itemmargin < 1
-					let table .= key."\n".repeat(' ', valmargin).dict[key]."\n"
+				if valmargin - strlen(key) < 1
+					let table .= key."\n".repeat(' ', valmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				else
-					let table .= key.repeat(' ', itemmargin).dict[key]."\n"
+					let table .= key.repeat(' ', itemmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				endif
 			endif
 		endfor
 	endif
 
-	return table
+	"return table
+	call input(table)
+	"echo table
 
 endfunction
 " }}}
@@ -2690,13 +2764,13 @@ function! VST_TocTable(list, fcol, scol, tcol, sinfo)
 		else
 			let nextsection = a:list[i+1][2]
 		endif
-		let title = b:vst_toc_numbers[title].title
+		let title = b:vst_toc_numbers[title].'   '.substitute(title, '^\s\+', '', '')
 		if a:sinfo >= line && a:sinfo < nextsection
 			let title = '[[[ '.title.' ]]]'
 		endif
 		let table .= level.' '.g:vst_headers[level].' '
 			\ .repeat(' ', secmargin-len(level.g:vst_headers[level].'  '))
-			\ .title.repeat(' ', thdmargin-len(title)).line."\n"
+			\ .title.repeat(' ', thdmargin-len(title)).' '.line."\n"
 		let i += 1
 	endwhile
 
@@ -2758,7 +2832,7 @@ function! VST_CreateDBs(table)
 				let url = 'mailto:'.url
 			endif
 			if title != '' && title != '_'
-				let g:hlinkdb[title] = url
+				let g:vst_hlinkdb[title] = url
 			endif
 		elseif preproc[i] =~ '^\s*\.\. role'
 			let rolekey = matchstr(preproc[i], 'role::\s*\zs.\{-}\ze\s*-vst-role-')
@@ -2766,7 +2840,7 @@ function! VST_CreateDBs(table)
 			if rolevalue == ''
 				let rolevalue = rolekey
 			endif
-			let g:roledb[rolekey] = rolevalue
+			let g:vst_roledb[rolekey] = rolevalue
 		endif
 	endfor
 	" Add embedded reusable URIs
@@ -2790,7 +2864,7 @@ function! VST_CreateDBs(table)
 			let url = 'mailto:'.url
 		endif
 		if title != ''
-			let g:hlinkdb[title] = url
+			let g:vst_hlinkdb[title] = url
 		endif
 		let i += 1
 	endwhile
@@ -2803,7 +2877,7 @@ function! VST_FoldText()
 	let length = v:foldend - v:foldstart
 	let indent = '+'.v:folddashes.repeat(' ', 5-len(length)).length
 		\ .' lines: '
-	let line = b:vst_fold_numbers[text].text
+	let line = b:vst_fold_numbers[text].'   '.substitute(text, '^\s\+', '', '')
 	let symbol = repeat(' ', 50-len(line)).'('
 		\ .matchstr(getline(v:foldstart+1), '^\s*\zs...\ze').')'
 	return indent.repeat(' ', 15-len(indent)).line.symbol.' '
@@ -3057,22 +3131,24 @@ endfunction
 function! VST_AnonHyperlink(text)
 	let parlines = split(a:text, '-vst-anon-hyperlink-')
 	let i = 0
-	while i < len(g:anonhlinkdb) 
-		if g:anonhlinkdb[i] =~ '_\s*$'
-			let href = g:anonhlinkdb[i]
+	let g:a0 = []
+	while i < len(g:vst_anonhlinkdb) 
+		if g:vst_anonhlinkdb[i] =~ '_\s*$'
+			let href = g:vst_anonhlinkdb[i]
 			let title = tolower(matchstr(href, '\(\.\. __ :\|__\)\s*\(`\?\)\zs.*\ze\2_\s*$'))
 			while href =~ '_\s*$'
 				" If ends in _ it is probably indirect link, process it.
-				if has_key(g:hlinkdb, title) && g:hlinkdb[title] != ''
-					let href = escape(g:hlinkdb[title], '&\~')
+				if has_key(g:vst_hlinkdb, title) && g:vst_hlinkdb[title] != ''
+					let href = escape(g:vst_hlinkdb[title], '&\~')
 				else
 					let href = '#l'.VST_IdMaker(title)
 				endif
 			endwhile
 		else
-			let href = matchstr(g:anonhlinkdb[i], '^\s*\(\.\. __:\|__\)\s*\zs.*')
+			let href = matchstr(g:vst_anonhlinkdb[i], '^\s*\(\.\. __:\|__\)\s*\zs.*')
 		endif
-		if i < len(parlines)-1
+		let g:a0 += [href]
+		if i < len(parlines) - 1
 			let parlines[i] .= href
 		endif
 		let i += 1
@@ -3158,13 +3234,14 @@ function! VST_EscapingSlash(text)
 	let par = substitute(par, '\\\@<!\\ \(-vst-new-line-\)\@!', '', 'g')
 	" And remove escaping \
 	let par = substitute(par, '\\\\ \(-vst-new-line-\)\@!', '\\ ', 'g')
+	" At last get rid of artificial new lines
+	let par = substitute(par, ' -vst-new-line- ', '\n', 'g')
 
 	" Take care about \-
 	let par = substitute(par, '\\\@<!\\-', '\&nbsp;', 'g')
 	" And remove escaping \
 	let par = substitute(par, '\\\\-', '\\-', 'g')
 	
-	let par = substitute(par, ' -vst-new-line- ', '\n', 'g')
 
 	return par
 endfunction
@@ -3172,8 +3249,8 @@ endfunction
 " VST_ExtraRoles:	Change text :roles: into proper tags " {{{
 function! VST_ExtraRoles(name, text)
 
-	if len(filter(copy(keys(g:roledb)), "v:val == a:name")) > 0
-		let par = '<vim:span class="'.VST_IdMaker(g:roledb[a:name]).'">'.a:text.'</vim:span>'
+	if len(filter(copy(keys(g:vst_roledb)), "v:val == a:name")) > 0
+		let par = '<vim:span class="'.VST_IdMaker(g:vst_roledb[a:name]).'">'.a:text.'</vim:span>'
 	else
 		let par = a:text
 	endif
@@ -3245,23 +3322,23 @@ function! VST_Hyperlink(text)
 			let title = substitute(title, '&lt;', '<', 'g')
 			let title = substitute(title, '&gt;', '>', 'g')
 			let title = substitute(title, '&copy;', '(c)', 'g')
-			let title = substitute(title, '&#64;', '@',  'g')
+			let title = substitute(title, '&#64;', '@', 'g')
 
-			if has_key(g:hlinkdb, title) && g:hlinkdb[title] != ''
-				let href = escape(g:hlinkdb[title], '&\~')
+			if has_key(g:vst_hlinkdb, title) && g:vst_hlinkdb[title] != ''
+				let href = escape(g:vst_hlinkdb[title], '&\~')
 				if href =~ '_\s*$'
 					while href =~ '_\s*$'
 						" If ends in _ it is probably indirect link, process it
 						" We need to remove _ from the end to get proper key name.
 						let shref = matchstr(href, '^\s*\(`\?\)\zs.*\ze\1_\s*$')
-						if has_key(g:hlinkdb, shref) && g:hlinkdb[shref] != ''
-							let href = escape(g:hlinkdb[shref], '&\~')
+						if has_key(g:vst_hlinkdb, shref) && g:vst_hlinkdb[shref] != ''
+							let href = escape(g:vst_hlinkdb[shref], '&\~')
 						else
 							let href = '#l'.tolower(VST_IdMaker(shref))
 						endif
 					endwhile
 				else
-					let href = escape(g:hlinkdb[title], '&\~')
+					let href = escape(g:vst_hlinkdb[title], '&\~')
 				endif
 			else
 				let href = '#l'.VST_IdMaker(title)
@@ -3319,9 +3396,9 @@ function! VST_IdMaker(str)
   let out = ''
   let ix = 0
   while ix < len(link)
-	if link[ix] =~ '[a-zA-Z0-9]' || link[ix] == '-'
+	if link[ix] =~ '[a-zA-Z0-9_-]'
 		let out .= link[ix]
-	elseif link[ix] =~ '\s\|_'
+	elseif link[ix] =~ '\s'
 		let out .= '-'
 	else
 		let out .= char2nr(link[ix])
@@ -3399,8 +3476,8 @@ function! VST_ImagePar(par, full)
 			while target =~ '_\s*$'
 				" If ends in _ it is probably indirect link, process it
 				let title = matchstr(target, '^\s*\(`\?\)\zs.*\ze\1_\s*$')
-				if has_key(g:hlinkdb, title) && g:hlinkdb[title] != ''
-					let href = escape(g:hlinkdb[title], '&\~')
+				if has_key(g:vst_hlinkdb, title) && g:vst_hlinkdb[title] != ''
+					let href = escape(g:vst_hlinkdb[title], '&\~')
 				else
 					let href = '#l'.tolower(VST_IdMaker(title))
 				endif
@@ -3549,11 +3626,12 @@ endfunction
 " entities.
 function! VST_ProtectLiteral(text)
 	" Escaping of special characters
+	"let par = substitute(a:text, "[[`\_|:]", '\="\&#".char2nr(submatch(0)).";"', 'g')
 	let par = substitute(a:text, '`', '\&#96;', 'g')
 	let par = substitute(par, '[', '\&#91;', 'g')
+	let par = substitute(par, '\', '\&#92;', 'g')
 	let par = substitute(par, '_', '\&#95;', 'g')
 	let par = substitute(par, '|', '\&#124;', 'g')
-	let par = substitute(par, '\', '\&#92;', 'g')
 	" : is required part of raw links, if we don't want to convert them,
 	" "remove" colon
 	let par = substitute(par, ':', '\&#58;', 'g')
@@ -3573,9 +3651,9 @@ function! VST_Replacement(text)
 	let par = a:text
 	" Loop through entries in replacedb 
 	" keys and values have to be proper Vim regexp constructs
-	for key in keys(g:replacedb)
-		let replace = g:replacedb[key]
-		"let replace = escape(g:replacedb[key], '\&~')
+	for key in keys(g:vst_replacedb)
+		let replace = g:vst_replacedb[key]
+		"let replace = escape(g:vst_replacedb[key], '\&~')
 		" [^:] blocks processing of reST style image replacement
 		if replace =~ '^image:[^:]'
 			" Old style image, deprecated {{{
@@ -3635,7 +3713,7 @@ function! VST_Replacement(text)
 				" Placeholder necessary to later trigger markup commands
 				let par = substitute(par, ltrim.'|'.key.'|__'.rtrim, '`{-vst-replace-{'.replace.'}-vst-replace-}`__', 'g')
 				let par = substitute(par, ltrim.'|'.key.'|_'.rtrim, '`{-vst-replace-{'.replace.'}-vst-replace-}`_', 'g')
-				if has_key(g:hlinkdb, key)
+				if has_key(g:vst_hlinkdb, key)
 					" replace can contain markup - in text it will be proceed,
 					" in db no. Force 
 					let proceed = VST_Markup(replace)
@@ -3643,7 +3721,7 @@ function! VST_Replacement(text)
 					let proceed = VST_EscapingSlash(proceed)
 					" And remove tags!
 					let proceed = substitute(proceed, '<.\?vim:[^>]\{-}>', '', 'g')
-					let g:hlinkdb[tolower(proceed)] = g:hlinkdb[key]
+					let g:vst_hlinkdb[tolower(proceed)] = g:vst_hlinkdb[key]
 				endif
 			endif
 			let par = substitute(par, ltrim.'|'.key.'|'.rtrim, replace, 'g')
@@ -3678,7 +3756,7 @@ function! VST_Replacement(text)
 			if par =~ '|_'
 				let par = substitute(par, '|'.key.'|__', '`'.replace.'`__', 'g')
 				let par = substitute(par, '|'.key.'|_', '`'.replace.'`_', 'g')
-				if has_key(g:hlinkdb, key)
+				if has_key(g:vst_hlinkdb, key)
 					" replace can contain markup - in text it will be proceed,
 					" in db no. Force 
 					let proceed = VST_Markup(replace)
@@ -3686,7 +3764,7 @@ function! VST_Replacement(text)
 					let proceed = VST_EscapingSlash(proceed)
 					" And remove tags!
 					let proceed = substitute(proceed, '<.\?vim:[^>]\{-}>', '', 'g')
-					let g:hlinkdb[tolower(proceed)] = g:hlinkdb[key]
+					let g:vst_hlinkdb[tolower(proceed)] = g:vst_hlinkdb[key]
 				endif
 			endif
 			"let par = substitute(par, ltrim.'|'.key.'|__'.rtrim, '`'.replace.'`__', 'g')
@@ -3863,7 +3941,7 @@ function! VST_SA_Hyperlink(text)
 	let par = substitute(par, '</vim:a></vim:a>', '</vim:a>', 'g')
 	" In 99% of causes some punct chars at the end of link (.?!;,) shouldn't be
 	" there and was already catched by VST_PunctTrap
-	let par = substitute(par, '\([.?!;,]\)</vim:a>', '</vim:a>\1', 'g')
+	let par = substitute(par, '\([.?!;,]\+\)</vim:a>', '</vim:a>\1', 'g')
 
 	return par
 endfunction
@@ -3876,10 +3954,8 @@ function! VST_SpecCharacter(text)
 	let par = substitute(par, '\\&[#a-z0-9]', '\&amp;#', 'g')
 	let par = substitute(par, '(c)', '\&copy;', 'g')
 	let par = substitute(par, '@', '\&#64;', 'g')
-
 	let par = substitute(par, '<', '\&lt;', 'g')
 	let par = substitute(par, '>', '\&gt;', 'g')
-
 	return par
 endfunction
 " }}}
@@ -3917,8 +3993,31 @@ endfunction
 " VST_FoldExpr: Folding expression {{{
 " lnum - current line to evaluate fold level
 function! VST_FoldExpr(lnum)
-	let list = keys(b:vst_fold)
-	if string(list) =~? "'".escape(getline(a:lnum), '.*\[~&^$')."'"
+	if getline(a:lnum) =~ "'"
+		let line = substitute(getline(a:lnum), "'", "''", 'g')
+	else
+		let line = getline(a:lnum)
+	endif
+	if b:vst_fold_lvl =~ 'r'
+		if string(b:vst_flvl_1) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>1'
+		elseif string(b:vst_flvl_2) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>2'
+		elseif string(b:vst_flvl_3) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>3'
+		elseif string(b:vst_flvl_4) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>4'
+		elseif string(b:vst_flvl_5) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>5'
+		elseif string(b:vst_flvl_6) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
+			return '>6'
+		else
+			return '='
+		endif
+	endif
+	"let list = keys(b:vst_fold)
+	let list = keys(b:vst_fold_list)
+	if string(list) =~? "[[ ]'".escape(line, '.*\[~&^$')."'[],]"
 		return '>1'
 	else
 		return '1'
@@ -3941,7 +4040,7 @@ endfunction
 function! VST_End()
 	unlet! g:paras g:paras_rez
 	unlet! g:pindent g:pindent_rez
-	unlet! g:ptype g:ptype_rez
+	"unlet! g:ptype g:ptype_rez
 	unlet! g:plinen g:plinen_rez
 	unlet! g:vst_recursion
 	unlet! g:vst_doc_title
@@ -3977,9 +4076,9 @@ endfunction
 
 	" Include external files before anything else will be done {{{
 	" But only for "real" export
-	if ',pdf,xml,html,s5,latex,tex,' =~ ','.format.','
+	if ',pdf,xml,html,s5,latex,tex,preproc,' =~ ','.format.','
 	let rec_counter = 0
-	while rec_counter < &maxfuncdepth
+	while rec_counter < &maxfuncdepth/2
 		" if len(filter(copy(text), 'v:val =~ "^\\s*\\.\\. \\(header\\|include\\|footer\\)::"')) > 0
 		" Tried to do in one regexp, but its alternative was sometimes working, sometimes not
 		" Note: it always works... even inside of preformatted text
@@ -4103,7 +4202,9 @@ endfunction
 	let rl_correction = 0
 	while i < len(text)-1
 		" Remove control characters, some Emacs deviation
-		let text[i] = substitute(text[i], '[[:cntrl:]]', '', 'g')
+		if text[i] =~ '[[:cntrl:]]'
+			let text[i] = substitute(text[i], '[[:cntrl:]]', '', 'g')
+		endif
 		" If comment directive is empty and following line is blank change
 		" it to .. comment:: directive. In this way indentation still will be
 		" taken into account
@@ -4163,18 +4264,18 @@ endfunction
 	" }}}
 	" Initiate variables for non export specific databases: {{{
 	let g:vst_headers = {}
-	let g:hlinkdb = {}
-	let g:replacedb = {}
-	let g:roledb = {}
+	let g:vst_hlinkdb = {}
+	let g:vst_replacedb = {}
+	let g:vst_roledb = {}
 
 	" }}}
 
-	let g:anonhlinkdb = filter(copy(text), 'v:val =~ "^\\s*\\(\\.\\. __:\\|__ \\)"')
+	let g:vst_anonhlinkdb = filter(copy(text), 'v:val =~ "^\\s*\\(\\.\\. __:\\|__ \\)"')
 	if ',pdf,xml,html,s5,latex,tex,' =~ ','.format.','
-		let g:footnotedb = {}
-		let g:citationdb = {}
-		let g:fielddb = {}
-		let g:metadb = {}
+		let g:vst_footnotedb = {}
+		let g:vst_citationdb = {}
+		let g:vst_fielddb = {}
+		let g:vst_metadb = {}
 
 		unlet! g:vst_encoding
 
@@ -4229,11 +4330,11 @@ endfunction
 				let lines[i] = substitute(lines[i], '-vst-escape-backtick-ddash-', '\\`__', 'g')
 				let lines[i] = substitute(lines[i], '-vst-escape-backtick-dash-', '\\`_', 'g')
 				let lines[i] = substitute(lines[i], '-vst-escape-backtick-', '\\`', 'g')
+				" Take care about "``"
+				let lines[i] = substitute(lines[i], '-vst-quot-dbacktick-', '"``"', 'g')
 				" Restore ` and _
 				let lines[i] = substitute(lines[i], '&#96;', '`', 'g')
 				let lines[i] = substitute(lines[i], '&#95;', '_', 'g')
-				" Take care about "``"
-				let lines[i] = substitute(lines[i], '-vst-quot-dbacktick-', '"``"', 'g')
 
 			endif
 			"if lines[i] =~ '\\'
@@ -4255,8 +4356,8 @@ endfunction
 			let index = stridx(fn, '<vim:footnote')
 			let fn = strpart(fn, index)
 			let number = matchstr(fn, '<vim:div class="fnumber"><vim:a href="#target-\d\+" name="footnote-\d\+">\[\zs\d\+\ze\]</vim:a></vim:div>')
-			let content = matchstr(fn, '<vim:div class="ftext">\zs.\{-}\ze</vim:div>')
-			let g:footnotedb[number] = content
+			let content = matchstr(fn, '<vim:div class="ftext">\zs.\{-}\ze\_s*</vim:div>')
+			let g:vst_footnotedb[number] = content
 			let fn = strpart(fn, 2)
 		endwhile
 		let fn = file
@@ -4264,13 +4365,13 @@ endfunction
 			let index = stridx(fn, '<vim:citation')
 			let fn = strpart(fn, index)
 			let label = matchstr(fn, '<vim:div class="cnumber"><vim:a href="#ctarget-\k\+" name="citation-\k\+">\[\zs\k\+\ze\]</vim:a></vim:div>')
-			let content = matchstr(fn, '<vim:div class="ctext">\zs.\{-}\ze</vim:div>')
-			let g:citationdb[label] = '['.label.'] '.content
+			let content = matchstr(fn, '<vim:div class="ctext">\zs.\{-}\ze\_s*</vim:div>')
+			let g:vst_citationdb[label] = '['.label.'] '.content
 			let fn = strpart(fn, 2)
 		endwhile
 		" }}}
 
-		if len(g:anonhlinkdb) > 0
+		if len(g:vst_anonhlinkdb) > 0
 			let file = VST_AnonHyperlink(file)
 		endif
 
@@ -4287,18 +4388,86 @@ endfunction
 
 		" Replace &#96; with `
 		let file = substitute(file, '&#96;', '`', 'g')
-		" Replace &#46; with .
-		let file = substitute(file, '&#46;', '.', 'g')
 		" Replace &#91; with [
 		let file = substitute(file, '&#91;', '[', 'g')
 		" Replace &#92; with \
 		let file = substitute(file, '&#92;', '\\', 'g')
 		" Replace &#95; with _
 		let file = substitute(file, '&#95;', '_', 'g')
+		" Replace &#46; with .
+		let file = substitute(file, '&#46;', '.', 'g')
 		" Replace &#124; with |
 		let file = substitute(file, '&#124;', '|', 'g')
 		" Replace &#58; with :
 		let file = substitute(file, '&#58;', ':', 'g')
+
+		" VST_URIMaker: Create real, properly encrypted URIs. {{{
+		function! VST_URIMaker(uri)
+			" Auxiliary functions lifted from eval.txt {{{
+			" The function Nr2Hex() returns the Hex string of a number.
+			func! Nr2Hex(nr)
+			  let n = a:nr
+			  let r = ""
+			  while n
+				let r = '0123456789ABCDEF'[n % 16] . r
+				let n = n / 16
+			  endwhile
+			  return r
+			endfunc
+			" The function String2Hex() converts each character in a string to a two
+			" character Hex string.
+			func! String2Hex(str)
+			  let out = ''
+			  let ix = 0
+			  while ix < strlen(a:str)
+				let out = out . Nr2Hex(char2nr(a:str[ix]))
+				let ix = ix + 1
+			  endwhile
+			  return out
+			endfunc " }}}
+			let uri = a:uri
+			if uri =~ '&'
+				let uri = substitute(uri, '&', '&amp;', 'g')
+			endif
+			if uri =~ '^#'
+				return uri
+			endif
+			" URI:
+			if uri =~ '^[-_!~*():?;@&=+$.,/a-zA-Z0-9#]*$'
+				return uri
+			else
+				let elements = split(uri, '#')
+				let first = elements[0]
+				if len(elements) > 1
+					let rest = '#'.join(elements[1:-1], '#')
+				else
+					let rest = ''
+				endif
+				let link = split(first, '.\zs')
+				let out = ''
+				let ix = 0
+				while ix < len(link)
+					if link[ix] =~ '[-_!~*():?;@&=+$.,/a-zA-Z0-9#]'
+						let out .= link[ix]
+					elseif link[ix] =~ '%'
+						" Bold assumption: all escape sequences I saw on the net
+						" were uppercased
+						if link[ix+1] =~ '[A-F0-9]' && link[ix+2] =~ '[A-F0-9]'
+							let out .= link[ix] . link[ix+1] . link[ix+2]
+							let ix = ix + 2
+						else
+							let out .= '%'.String2Hex('%')
+						endif
+					else
+						let out .= '%'.String2Hex(link[ix])
+					endif
+					let ix += 1
+				endwhile
+			endif
+			return out.rest
+		endfunction
+		" }}}
+		let file = substitute(file, 'vim:\(img src="\|a href="\)\(.\{-}\)"', '\="vim:".submatch(1).VST_URIMaker(submatch(2))."\""', 'g')
 
 		" Figure out proper MIME charset from the 'encoding' option. {{{
 		if exists("g:vst_encoding")
@@ -4342,11 +4511,7 @@ endfunction
 
 	if format =~ '^\(html\|s5\)$'
 		" HTML export {{{
-		" 1. Header
-		" 2. Encoding
-		" 3. CSS
-		" 4. Closing
-		"
+
 		let language = matchstr(v:lang, '.*\ze_')
 
 		" CSS: {{{
@@ -4401,35 +4566,35 @@ endfunction
 		let metasubject = ''
 		let metakeywords = ''
 		let metadate = ''
-		if has_key(g:fielddb, 'author')
-			let metaauthor = '<meta name="Author" content="'.g:fielddb['author']."\" />\n"
+		if has_key(g:vst_fielddb, 'author')
+			let metaauthor = '<meta name="Author" content="'.g:vst_fielddb['author']."\" />\n"
 		endif
-		if has_key(g:fielddb, 'title')
-			let metatitle = '<meta name="Title" content="'.g:fielddb['title']."\" />\n"
+		if has_key(g:vst_fielddb, 'title')
+			let metatitle = '<meta name="Title" content="'.g:vst_fielddb['title']."\" />\n"
 		endif
-		if has_key(g:fielddb, 'keywords')
-			let metakeywords = '<meta name="Keywords" content="'.g:fielddb['keywords']."\" />\n"
+		if has_key(g:vst_fielddb, 'keywords')
+			let metakeywords = '<meta name="Keywords" content="'.g:vst_fielddb['keywords']."\" />\n"
 		endif
-		if has_key(g:fielddb, 'subject')
-			let metasubject = '<meta name="Subject" content="'.g:fielddb['subject']."\" />\n"
+		if has_key(g:vst_fielddb, 'subject')
+			let metasubject = '<meta name="Subject" content="'.g:vst_fielddb['subject']."\" />\n"
 		endif
-		if has_key(g:fielddb, 'date')
-			if g:fielddb['date'] != 'NONE'
-				let metadate = '<meta name="Date" content="'.g:fielddb['date']."\" />\n"
+		if has_key(g:vst_fielddb, 'date')
+			if g:vst_fielddb['date'] != 'NONE'
+				let metadate = '<meta name="Date" content="'.g:vst_fielddb['date']."\" />\n"
 			endif
 		endif
 		let metainfo = metaauthor.metatitle.metakeywords.metasubject.metadate
 
 		let metadata = ''
-		for key in keys(g:metadb)
+		for key in keys(g:vst_metadb)
 			if key =~ '^http-equiv='
 				let item = substitute(key, 'http-equiv=\(.*\)', 'http-equiv="\1"', '')
-				let element = '<meta '.item.' content="'.g:metadb[key].'" />'."\n"
+				let element = '<meta '.item.' content="'.g:vst_metadb[key].'" />'."\n"
 			elseif key =~ '^description \(lang\|scheme\|dir\)'
 				let item = substitute(key, 'description \(lang\|scheme\|dir\)=\(.*\)', 'name="description" \1="\2", '')
-				let element = '<meta '.item.' content="'.g:metadb[key].'" />'."\n"
+				let element = '<meta '.item.' content="'.g:vst_metadb[key].'" />'."\n"
 			else
-				let element = '<meta name="'.key.'" content="'.g:metadb[key].'" />'."\n"
+				let element = '<meta name="'.key.'" content="'.g:vst_metadb[key].'" />'."\n"
 			endif
 			let metadata .= element
 		endfor
@@ -4438,7 +4603,7 @@ endfunction
 			let htmltitle = substitute(g:vst_doc_title, '^\s*', '', '')
             let htmltitle = VST_SpecCharacter(htmltitle)
 		elseif metasubject != ''
-			let htmltitle = g:fielddb['subject']
+			let htmltitle = g:vst_fielddb['subject']
 		else
 			let htmltitle = expand("%")
 		endif
@@ -4452,13 +4617,13 @@ endfunction
 				let s5foot = substitute(s5foot, '\_s*</vim:p>\_s*$', '', '')
 				unlet! s5footer
 			else
-				if has_key(g:fielddb, 'author')
-					let s5author = g:fielddb['author']
+				if has_key(g:vst_fielddb, 'author')
+					let s5author = g:vst_fielddb['author']
 				else
 					let s5author = 'Author'
 				endif
-				if has_key(g:fielddb, 'date') && g:fielddb['date'] != 'NONE'
-					let s5date = g:fielddb['date']
+				if has_key(g:vst_fielddb, 'date') && g:vst_fielddb['date'] != 'NONE'
+					let s5date = g:vst_fielddb['date']
 				else
 					let s5date = 'Date'
 				endif
@@ -4503,15 +4668,29 @@ endfunction
 
 		let metainfo .= metadata
 
+		if file =~ '<vim:ol[^>]*start="'
+			let g:zzz = 1
+			let doctype =
+				\ '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"'."\n"
+				\.'    "http://www.w3.org/TR/html4/loose.dtd">'."\n"
+				"\ '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '."\n"
+				"\.'	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> '."\n"
+		else
+			let doctype = 
+				\ '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"'."\n"
+				\.'    "http://www.w3.org/TR/html4/strict.dtd">'."\n"
+				"\ '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" '."\n"
+				"\.' "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'."\n"
+		endif
+
 		let header = 
-			\ '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '."\n"
-			\.'	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"> '."\n"
+			\ doctype
 			\.'<html xmlns="http://www.w3.org/1999/xhtml" lang="'.language.'" '
 			\.'xml:lang="'.language.'">'."\n"
 			\.'<head>'."\n"
 			\.'<meta http-equiv="Content-Type" content="text/html; charset='.encoding.'" />'."\n"
 			\.'<title>'.htmltitle.'</title>'."\n"
-			\.'<meta name="Generator" content="Vim reStructured Text '.s:vst_ver.' - Vim'.v:version/100.".".v:version % 100.'" />'."\n"
+			\.'<meta name="Generator" content="Vim reStructured Text '.s:vst_ver.' - Vim '.v:version/100.".".v:version % 100.'" />'."\n"
 			\.metainfo."\n"
 			\.css."\n"
 			\.s5head."\n"
@@ -4542,9 +4721,9 @@ endfunction
 
 		" Replace footnote and citation with div class="footnote"
 		let file = substitute(file, '</footnote', '</div', 'g')
-		let file = substitute(file, '</citation', '</div', 'g')
 		let file = substitute(file, '<footnote>', '<div class="footnote">', 'g')
 		let file = substitute(file, '<footnote class="\(.\{-}\)">', '<div class="footnote \1">', 'g')
+		let file = substitute(file, '</citation', '</div', 'g')
 		let file = substitute(file, '<citation>', '<div class="footnote">', 'g')
 		let file = substitute(file, '<citation class="\(.\{-}\)">', '<div class="footnote \1">', 'g')
 
@@ -4635,11 +4814,7 @@ endfunction
 		" Reduce indentation inside of <pre> tags to minimum of 1 space {{{
 		silent call cursor(1,1)
 		while search('^\s*<pre', 'W')
-			if getline('.') =~ 'class="rawlatex'
-				let rawlatex = 1
-			else
-				let rawlatex = 0
-			endif
+			let rawlatex = (getline('.') =~ 'class="rawlatex' ? 1 : 0)
 			silent normal! j
 			let line1 = line('.')
 			let indlist = []
@@ -4669,7 +4844,7 @@ endfunction
 			endif
 		endwhile
 		" }}}
-		" Create 2html colored preformatted text {{{
+		" Put 2html CSS styles into head {{{
 		silent call cursor(1,1)
 		if search('<pre class="tohtml-[^"]\+">')
 			call VST_2html()
@@ -4855,26 +5030,26 @@ endfunction
 
 		" Remove special chars catchers
 		let file = substitute(file, '&#64;', '@', 'g')
-		let file = substitute(file, '&\\#64;', '@', 'g')
 		let file = substitute(file, '&#91;', '[', 'g')
-		let file = substitute(file, '&\\#91;', '[', 'g')
 		let file = substitute(file, '&#92;', '\\', 'g')
-		let file = substitute(file, '&\\#92;', '\\', 'g')
 		let file = substitute(file, '&#58;', ':', 'g')
+		let file = substitute(file, '&\\#64;', '@', 'g')
+		let file = substitute(file, '&\\#91;', '[', 'g')
+		let file = substitute(file, '&\\#92;', '\\', 'g')
 		let file = substitute(file, '&\\#58;', ':', 'g')
 
 		" Footnotes have to be here to process them by other substitutions:
-		for fn in keys(g:footnotedb)
+		for fn in keys(g:vst_footnotedb)
 			let fnumberleft = '<vim:a href="#footnote-'.fn.'" name="target-'.fn.'">\['
 			let fnumberright = '\]</vim:a>'
-			let content = escape(g:footnotedb[fn], '&/\~')
+			let content = escape(g:vst_footnotedb[fn], '&/\~')
 			let file = substitute(file, fnumberleft.fn.fnumberright, '\\footnote{'.content.'}', '')
 		endfor
 		" Citations have to be here to process them by other substitutions:
-		for fn in keys(g:citationdb)
+		for fn in keys(g:vst_citationdb)
 			let fnumberleft = '<vim:a href="#citation-'.fn.'" name="ctarget-'.fn.'">\['
 			let fnumberright = '\]</vim:a>'
-			let content = escape(g:citationdb[fn], '&/\~')
+			let content = escape(g:vst_citationdb[fn], '&/\~')
 			let file = substitute(file, fnumberleft.fn.fnumberright, '\\footnote{'.content.'}', '')
 		endfor
 		" Remove footnotes from xml
@@ -5043,7 +5218,6 @@ endfunction
 		let file = substitute(file, "</vim:td>", '', "g")
 
 		" Line
-		" let file = substitute(file, "<vim:hr.\\{-}>", '\\begin{center}\\rule{.8\\textwidth}{0.2pt}\\end{center}', "g")
 		" \transition allows for easy change of transition display, eg. for
 		" fancy graphics
 		let file = substitute(file, "<vim:hr.\\{-}>", '\\transition', "g")
@@ -5079,13 +5253,13 @@ endfunction
 		let file = substitute(file, '<vim:figure.\{-}>', '\\begin{center}\n\\begin{minipage}{0.6\\textwidth}', 'g')
 		let file = substitute(file, '</vim:figure>', '\\end{minipage}\n\\end{center}', 'g')
 
-		" Ignore block elements
-		let file = substitute(file, '<vim:block.\{-}>', '', 'g')
-		let file = substitute(file, '</vim:block>', '', 'g')
+		" Create ghost commands for custom block directives
+		let file = substitute(file, '<vim:block.\{-}class="\(.\{-}\)">', '\\vst\1{', 'g')
+		let file = substitute(file, '</vim:block>', '}', 'g')
 
-		" Ignore container elements
-		let file = substitute(file, '<vim:container.\{-}>', '', 'g')
-		let file = substitute(file, '</vim:container>', '', 'g')
+		" Create ghost commands for custom container directives
+		let file = substitute(file, '<vim:container.\{-}class="\(.\{-}\)">', '\\vst\1{', 'g')
+		let file = substitute(file, '</vim:container>', '}', 'g')
 
 		" Topic
 		let file = substitute(file, '<vim:topic.\{-}>', '\\hfill\\begin{minipage}{0.9\\textwidth}', 'g')
@@ -5105,9 +5279,10 @@ endfunction
 		" let file = substitute(file, '<vim:span.\{-}>', '\\emph{', 'g')
 		let file = substitute(file, '<vim:span class="\(.\{-}\)">', '\\vst\1{', 'g')
 
-		" Ignore all <vim:p> tags
+		" Replace empty vim:p tags when hypertargets
+		let file = substitute(file, '<vim:p id="\(.\{-}\)"></vim:p>', '\\hypertarget{\1}{}', "g")
+		" Ignore all other <vim:p> tags
 		let file = substitute(file, '<.\?vim:p\>.\{-}>', "", "g")
-
 
 		" Make sure no (La)TeX entity is in URL address of hyperlinks
 		let file = substitute(file, '\\href{\([^}]\{-}\)\\\(La\)\?TeX{}', '\\href{\1\2TeX', 'g')
@@ -5116,17 +5291,30 @@ endfunction
 		let file = substitute(file, '\\href{\([^}]\{-}\)\\_', '\\href{\1_', 'g')
 		let file = substitute(file, '\\hypertarget{\([^}]\{-}\)\\_', '\\hypertarget{\1_', 'g')
 		" Prepare newcommands from roles
-		if exists("g:roledb")
-			let rolenewcommands = ''
-			let rolekeys = keys(g:roledb)
+		if exists("g:vst_roledb")
+			let rolenewcommands = '%% Commands for content of roles directives'."\n"
+			let rolekeys = keys(g:vst_roledb)
 			for i in range(len(rolekeys))
-				let name = g:roledb[rolekeys[i]]
+				let name = g:vst_roledb[rolekeys[i]]
 				let rolenewcommands .= '\newcommand{\vst'.name.'}[1]{\textnormal{#1}}'."\n"
 			endfor
 			unlet! rolekeys
 			unlet! name
 		else
 			let rolenewcommands = "\n"
+		endif
+		" Prepare newcommands from containers
+		if len("g:vst_containers") > 0
+			let containernewcommands = '%% Commands for content of container directives'."\n"
+			let usednames = ''
+			for name in g:vst_containers
+				if usednames !~ ','.name.','
+					let usednames .= ','.name.','
+					let containernewcommands .= '\newcommand{\vst'.name.'}[1]{#1}'."\n"
+				endif
+			endfor
+		else
+			let containernewcommands = "\n"
 		endif
 
 		" Preamble {{{
@@ -5135,6 +5323,7 @@ endfunction
 		"\.'{\renewcommand{\makelabel}[1]{\parbox[b]{\labelwidth}{\makebox[0pt][l]{\textbf{##1}}\mbox{}\\}}'."\n"
 		let preamble = 
 			\ '\documentclass[12pt]{article}'."\n"
+			\.'%% Generated by Vim reStructured Text '.s:vst_ver.' - Vim '.v:version/100.".".v:version % 100."\n"
 			\.'\usepackage[a4paper,margin=2.5cm,nohead]{geometry}'."\n"
 			\.'\usepackage{'.listings."}\n"
 			\.'\usepackage{graphicx}'."\n"
@@ -5167,19 +5356,20 @@ endfunction
 			\.'\newcommand{\attribution}[1]{\raggedleft\textit{#1}}'."\n"
 			\.'\newcommand{\rubric}[1]{\vskip15pt{\large #1}}'."\n"
 			\.rolenewcommands."\n"
+			\.containernewcommands."\n"
 			\.userpreamble."\n"
 			\.'\usepackage[pdftex]{hyperref}'."\n"
 		" Additional data {{{
 		let author = ''
 		let data = ''
-		if has_key(g:fielddb, 'author')
-			let author = '\author{'.g:fielddb['author'].'}'."\n"
+		if has_key(g:vst_fielddb, 'author')
+			let author = '\author{'.g:vst_fielddb['author'].'}'."\n"
 		endif
-		if has_key(g:fielddb, 'date')
-			if g:fielddb['date'] == 'NONE'
-				let g:fielddb['date'] = ''
+		if has_key(g:vst_fielddb, 'date')
+			if g:vst_fielddb['date'] == 'NONE'
+				let g:vst_fielddb['date'] = ''
 			endif
-			let data = '\date{'.g:fielddb['date'].'}'."\n"
+			let data = '\date{'.g:vst_fielddb['date'].'}'."\n"
 		else
 			let data = ''
 		endif
@@ -5190,27 +5380,27 @@ endfunction
 		let pdftitle = ''
 		let pdfsubject = ''
 		let pdfkeywords = ''
-		if has_key(g:fielddb, 'author')
-			let pdfauthor = 'pdfauthor={'.g:fielddb['author']."},\n"
+		if has_key(g:vst_fielddb, 'author')
+			let pdfauthor = 'pdfauthor={'.g:vst_fielddb['author']."},\n"
 		endif
-		if has_key(g:fielddb, 'title')
-			let pdftitle = 'pdftitle={'.g:fielddb['title']."},\n"
+		if has_key(g:vst_fielddb, 'title')
+			let pdftitle = 'pdftitle={'.g:vst_fielddb['title']."},\n"
 		endif
-		if has_key(g:fielddb, 'keywords')
-			let pdfkeywords = 'pdfkeywords={'.g:fielddb['keywords']."},\n"
+		if has_key(g:vst_fielddb, 'keywords')
+			let pdfkeywords = 'pdfkeywords={'.g:vst_fielddb['keywords']."},\n"
 		endif
-		if has_key(g:fielddb, 'subject')
-			let pdfsubject = 'pdfsubject={'.g:fielddb['subject']."}"
+		if has_key(g:vst_fielddb, 'subject')
+			let pdfsubject = 'pdfsubject={'.g:vst_fielddb['subject']."}"
 		endif
-		for key in keys(g:metadb)
+		for key in keys(g:vst_metadb)
 			if key =~ 'author' && pdfauthor == ''
-				let pdfauthor = 'pdfauthor={'.g:metadb[key]."},\n"
+				let pdfauthor = 'pdfauthor={'.g:vst_metadb[key]."},\n"
 			elseif key =~ 'title' && pdftitle == ''
-				let pdftitle = 'pdftitle={'.g:metadb[key]."},\n"
+				let pdftitle = 'pdftitle={'.g:vst_metadb[key]."},\n"
 			elseif key =~ 'keywords' && pdfkeywords == ''
-				let pdfkeywords = 'pdfkeywords={'.g:metadb[key]."},\n"
+				let pdfkeywords = 'pdfkeywords={'.g:vst_metadb[key]."},\n"
 			elseif key =~ 'subject' && pdfsubject == ''
-				let pdfsubject = 'pdfsubject={'.g:metadb[key]."}"
+				let pdfsubject = 'pdfsubject={'.g:vst_metadb[key]."}"
 			endif
 		endfor
 
@@ -5224,6 +5414,7 @@ endfunction
 			\.pdfauthor.pdftitle.pdfkeywords.pdfsubject."}\n"
 
 		let file = preamble."\n".pdfinfo."\n".author.data."\n".file."\n".footer
+		" }}}
 		" }}}
 		
 		" Create comments
@@ -5404,12 +5595,12 @@ endfunction
 		silent %s/\(\\begin{minipage}{0\.6\\textwidth}\)\n\(\\begin{figure.*\)/\2\r\1/ge
 		" Remove special chars catchers
 		silent %s/&#64;/@/ge
-		silent %s/&\\#64;/@/ge
 		silent %s/&#91;/[/ge
-		silent %s/&\\#91;/[/ge
 		silent %s/&#92;/\\/ge
-		silent %s/&\\#92;/\\/ge
 		silent %s/&#58;/:/ge
+		silent %s/&\\#64;/@/ge
+		silent %s/&\\#91;/[/ge
+		silent %s/&\\#92;/\\/ge
 		silent %s/&\\#58;/:/ge
 		" Insert new line before \item[], it causes problems in complex
 		" environments
@@ -5538,15 +5729,13 @@ endfunction
 		endif
 
 		silent call cursor(1,1)
-		call VST_End()
-		" }}}
 		" }}}
 	" Auxiliary commands {{{
 	elseif format =~ '^head'
 		" Symbols for section titles {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-		echo VST_DictTable(g:vst_headers, 'Level', 'Symbol', 0)
+		call VST_DictTable(g:vst_headers, 'Level', 'Symbol', 0)
 		" }}}
 	elseif format =~ '^toc'
 		" Table of contents for file {{{
@@ -5607,7 +5796,7 @@ endfunction
 			let i += 1
 		endwhile
 
-		echo VST_TocTable(tocc, 'Nr', 'Title', 'Line', line)
+		echo VST_TocTable(tocc, 'Nr', 'Title', ' Line', line)
 		" }}}
 	elseif format =~ '^fold'
 		" Folding {{{
@@ -5666,32 +5855,29 @@ endfunction
 			let i += 1
 		endwhile
 		" }}}
+		" Prepare fold levels {{{
+		let b:vst_fold_lvl = matchstr(format, '\zs.\ze\s*$')
+		if b:vst_fold_lvl =~ 'r'
+			for i in [1, 2, 3, 4, 5, 6]
+				let b:vst_fold_list_{i} = filter(deepcopy(b:vst_fold), 'v:val == i')
+				let b:vst_flvl_{i} = keys(b:vst_fold_list_{i})
+			endfor
+		else
+			if b:vst_fold_lvl !~ '\d'
+				let b:vst_fold_lvl = 0
+			elseif b:vst_fold_lvl =~ '\d' && b:vst_fold_lvl > 6
+				let b:vst_fold_lvl = 6
+			endif
+			if b:vst_fold_lvl != 0
+				let b:vst_fold_list = filter(deepcopy(b:vst_fold), 'v:val <= b:vst_fold_lvl')
+			else
+				let b:vst_fold_list = b:vst_fold
+			endif
+		endif
+		" }}}
 		setlocal foldmethod=expr
 		setlocal foldexpr=VST_FoldExpr(v:lnum)
 		setlocal foldtext=VST_FoldText()
-		" Ancient fold system (worth of preserving): {{{
-		" Full elastic folding, maybe useful on 10GHz beasts
-		"function! VST_FoldExpr(lnum, fold)
-		"	let line = filter(copy(keys(a:fold)), 'v:val =~ "^'.getline(a:lnum).'$"')
-		"	if len(line) > 0
-		"		return '>'.a:fold[line[0]]
-		"	else
-		"		return '='
-		"	endif
-		"endfunction
-		" }}}
-		" }}}
-	elseif format =~ '^f\(block\|image\|figure\|sidebar\|compound\|topic\|rubric\|table\|tip\|note\|warning\|admonition\|include\|pull-quote\|class\|meta\|raw\|2html\)'
-		" Folding by directive {{{
-		let directive = matchstr(format, '^f\zs.*')
-		setlocal foldmethod=expr
-		exe "setlocal foldexpr=getline(v:lnum)=~?'^\\\\s*\\\.\\\.\\\ ".directive."::'?'>1':1"
-		function! VST_FoldDirective()
-			let text = getline(v:foldstart)
-			let indent = '+'.v:folddashes
-			return indent.repeat(' ', 2).text.' '
-		endfunction
-		setlocal foldtext=VST_FoldDirective()
 		" }}}
 	elseif format =~ '^fblank'
 		" Folding by blank lines {{{
@@ -5705,29 +5891,47 @@ endfunction
 		endfunction
 		setlocal foldtext=VST_FoldText()
 		" }}}
+	elseif format =~ '^f'
+		" Folding by directive {{{
+	"elseif format =~ '^f\(block\|container\|image\|figure\|sidebar\|compound\|topic\|rubric\|table\|tip\|note\|warning\|admonition\|include\|pull-quote\|class\|meta\|raw\|2html\)'
+		let directive = matchstr(format, '^f\zs.*')
+		setlocal foldmethod=expr
+		"exe "setlocal foldexpr=getline(v:lnum)=~?'^\\\\s*\\\.\\\.\\\ ".directive."::'?'>1':1"
+		exe "setlocal foldexpr=getline(v:lnum)=~?'^\\\\s*\\\.\\\.\\\ ".directive."'?'>1':1"
+		function! VST_FoldDirective()
+			let text = getline(v:foldstart)
+			let indent = '+'.v:folddashes
+			let fill = 65 - (len(indent) + len(text) + 3)
+			if fill < 1
+				let fill = 1
+			endif
+			return indent.'  '.text.repeat(' ', fill).v:foldstart.' ('.v:foldstart*100/line('$').'%)'
+		endfunction
+		setlocal foldtext=VST_FoldDirective()
+		" }}}
 	elseif format =~ '^link'
 		" Link table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-		echo VST_DictTable(g:hlinkdb, 'Text', 'Link', 0)
+		call VST_DictTable(g:vst_hlinkdb, 'Text', 'Link', 0)
 		" }}}
 	elseif format =~ '^slink'
 		" Sorted link table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-		echo VST_DictTable(g:hlinkdb, 'Text', 'Link', 1)
+		call VST_DictTable(g:vst_hlinkdb, 'Text', 'Link', 1)
 		" }}}
 	elseif format =~ '^rep'
 		" Replacement table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-		echo VST_DictTable(g:replacedb, 'Symbol', 'Replacement', 0)
+		call VST_DictTable(g:vst_replacedb, 'Symbol', 'Replacement', 0)
 		" }}}
 	elseif format =~ '^srep'
 		" Sorted replacement table {{{
 		call VST_Headers(text)
 		unlet! b:vst_first_parsing
-		echo VST_DictTable(g:replacedb, 'Symbol', 'Replacement', 1)
+		call VST_DictTable(g:vst_replacedb, 'Symbol', 'Replacement', 1)
 		" }}}
 	elseif format =~ '^help'
 		" Help for commands {{{
@@ -5739,7 +5943,6 @@ endfunction
 			\."rest  - export to reST format\n"
 			\."s5    - export to S5 HTML presentation\n"
 			\."  ---------------\n"
-			\."fold  - (re)create folds in file\n"
 			\."toc   - file table of contents\n"
 			\."head  - show used symbols for headers\n"
 			\."link  - show table of link declarations\n"
@@ -5749,14 +5952,22 @@ endfunction
 			\."preproc - process inclusion commands (non-recursively)\n"
 			\."help  - this message\n"
 			\."  ---------------\n"
+			\."fold  - (re)create folds in file\n"
+			\."foldr - (re)create folds recursively in file\n"
+			\."fold1 - (re)create folds of 1st level headers in file\n"
+			\."fold2 - (re)create folds up to 2nd level header in file\n"
+			\."fold3 - (re)create folds up to 3rd level header in file\n"
+			\."fold4 - (re)create folds up to 4th level header in file\n"
+			\."fold5 - (re)create folds up to 5th level header in file\n"
+			\."fold6 - (re)create folds up to 6th level header in file\n"
+			\."  ---------------\n"
 			\."Additional commands:\n"
-			\.":Vsti - immediate write of files\n"
+			\.":Vsti - immediately write file\n"
 			\.":Vstm - display menus (no arguments)"
 		return ''
 		" }}}
 	elseif format =~ '^pre'
 		" Interpret all including commands and put them in file {{{
-		" Note: this is one level, does not work recursively.
 		silent normal! ggdG
 		let jtext = join(text, "\n")
 		silent 0put =jtext
@@ -5782,13 +5993,13 @@ function! VST_Ornaments()
 	" Get ornament character
 	" HEADDEF:
 	let s:vst_headdef = '\(=\{3,}\|+\{3,}\|\*\{3,}\|\^\{3,}\|%\{3,}\|\$\{3,}\|#\{3,}\|@\{3,}\|;\{3,}\|"\{3,}\|\.\{3,}\|,\{3,}\|`\{3,}\|\~\{3,}\|-\{3,}\|!\{3,}\|(\{3,}\|)\{3,}\|:\{3,}\|_\{3,}\|&\{3,}\|}\{3,}\|{\{3,}\||\{3,}\|?\{3,}\|<\{3,}\|>\{3,}\|\\\{3,}\|\[\{3,}\|\]\{3,}\|\/\{3,}\|''\{3,}\)'
-	let s:vst_headchars = '[][=+*^%$#@;".,`~!():_&{}|?<>/\\''-]'
+	let s:vst_headchars2 = '\(=\|+\|\*\|\^\|%\|\$\|#\|@\|;\|"\|\.\|,\|`\|\~\|-\|!\|(\|)\|:\|_\|&\|}\|{\||\|?\|<\|>\|\\\|\[\|\]\|\/\|''\)'
 	let curline = getline(line('.'))
 	let character = curline[len(curline)-1]
 	if curline =~ '^\s*$'
 		" Temporary thing, to by-pass headchars test
 		let character = '-'
-	elseif curline !~ '^\s*'.s:vst_headchars.'$'
+	elseif curline !~ '^\s*'.s:vst_headchars2.'\+$'
 		return ''
 	endif
 
@@ -5851,8 +6062,8 @@ function! VST_Ornaments()
 				let character = matchstr(getline(last_single_ornament), '^\s*\zs.\ze')
 			endif
 		endif
-		if prevline_len - len(curline) < 3
-			let ornament_len = 3
+		if prevline_len < 3
+			let ornament_len = 3 - len(curline)
 		else
 			let ornament_len = prevline_len - len(curline)
 		endif
@@ -5880,10 +6091,10 @@ function! VST_Ornaments()
 		else
 			let correction = 1
 		endif
-		if nextline_len - len(curline) + correction < 3
+		if nextline_len < 3
 			let ornament_len = 3
 		else
-			let ornament_len = nextline_len - len(curline) + correction
+			let ornament_len = nextline_len
 		endif
 		let ornament = repeat(character, ornament_len)
 		return ornament."\n".nextline."\n".ornament."\n"
@@ -5895,8 +6106,49 @@ function! VST_Ornaments()
 
 endfunction
 " }}}
+" VST_RotateOrnaments: rotate characters in ornaments {{{
+" headers
+function! VST_RotateOrnaments()
+	" HEADDEF:
+	let s:vst_headdef = '\(=\{3,}\|+\{3,}\|\*\{3,}\|\^\{3,}\|%\{3,}\|\$\{3,}\|#\{3,}\|@\{3,}\|;\{3,}\|"\{3,}\|\.\{3,}\|,\{3,}\|`\{3,}\|\~\{3,}\|-\{3,}\|!\{3,}\|(\{3,}\|)\{3,}\|:\{3,}\|_\{3,}\|&\{3,}\|}\{3,}\|{\{3,}\||\{3,}\|?\{3,}\|<\{3,}\|>\{3,}\|\\\{3,}\|\[\{3,}\|\]\{3,}\|\/\{3,}\|''\{3,}\)'
+	let s:vst_headchars2 = '\(=\|+\|\*\|\^\|%\|\$\|#\|@\|;\|"\|\.\|,\|`\|\~\|-\|!\|(\|)\|:\|_\|&\|}\|{\||\|?\|<\|>\|\\\|\[\|\]\|\/\|''\)'
+	" Make sure we are in position to perform any actions
+	" This is more general regexp, could match several 
+	if getline('.') !~ '^\s*'.s:vst_headdef.'\s*$'
+		return 0
+	endif
+
+	" Get situation: double/single ornament, transition
+	let prevline = getline(line('.')-1)
+	let nextline = getline(line('.')+1)
+
+	if prevline =~ '^\s*$'
+		let prevline_is_empty = 1
+	else
+		let prevline_is_empty = 0
+	endif
+
+	if nextline =~ '^\s*$'
+		let nextline_is_empty = 1
+	else
+		let nextline_is_empty = 0
+	endif
+
+	if !exists("g:vst_headers")
+		call input('No knowledge about headers, run :Vst head')
+		return 0
+	endif
+
+	if nextline_is_empty == 1 && prevline_is_empty == 0
+		" Single ornament
+		let a = 0
+	endif
+	" Make sure we have data about headers. Note: updating of data will be
+	" done manually or updated at the end
+endfunction
 " }}}
 " Auxiliary mappings
 inoremap <silent> <C-B>o <C-R>=VST_Ornaments()<CR>
+"noremap <silent> <C-B>o <C-R>=VST_RotateOrnaments()<CR>
 endfunction
 " vim:fdm=marker:ff=unix:noet:ts=4:sw=4:nowrap

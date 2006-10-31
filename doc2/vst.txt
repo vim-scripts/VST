@@ -4,9 +4,9 @@ Vim reStructured Text
 :Author: Mikolaj Machowski
 :Title: Vim reStructured Text - HTML and LaTeX output
 :Keywords: Vim, LaTeX, PDF, HTML, XML
-:Version: 1.2
+:Version: 1.3
 :License: GPL v. 2
-:Date: 13 Oct 2006
+:Date: 31 Oct 2006
 
 For a long time Vim_ users were asking for "real" export to HTML.  This is,
 I believe, first real try to achieve this effect.  This is Vim version of
@@ -103,7 +103,7 @@ file which will be sourced at the time of export.
 Export to HTML
 ~~~~~~~~~~~~~~
 
-These commands will create XHTML 1.0 Transitional file::
+These commands will create XHTML 1.0 file::
 
     :Vst html
     :Vst
@@ -111,6 +111,9 @@ These commands will create XHTML 1.0 Transitional file::
 Vst command (with any export argument) accepts range::
 
     :[range]Vst {[export]}
+
+When file use exclusively lists starting from 1/a/A/etc. doctype is Strict, in
+other case it is Transitional.
 
 From special characters/entities |VST| handles at the moment::
 
@@ -326,7 +329,7 @@ column shows decoration for that level; third column are section titles with
 numbers of sections as they will be shown in HTML and LaTeX export.  Title of
 section were cursor was at the moment of invoking command is taken into 
 ``[[[ ]]]``; fourth column are line numbers of section titles -- user can
-immediately issue Vim command, eg.  ``:625`` to go to Roles section.
+immediately issue Vim command, eg. ``:625`` to go to Roles section.
 
 ``link`` and ``slink``
 ``````````````````````
@@ -371,12 +374,13 @@ Replace table for this document (in chronological order)::
     VST                 Vim reStructured Text
 
 
-.. _folding:
+Folding
+```````
 
-``fold``
-````````
+|VST| offers whole family of commands for folding of file.
 
-This command will create fold for |VST| document::
+This command will create simple folds for document, each section has its own
+fold on the same level::
 
     :Vst fold
 
@@ -388,6 +392,28 @@ sections.
 In front of header text you will see numbers of section as they will be
 visible in HTML and LaTeX formats.
 
+At the end of line enclosed in parenthesis are charaters used as ornament of
+section title.
+
+Command::
+
+    :Vst foldr
+    
+Will create folds recursively, each level of headers will have its own level
+of folding.
+
+Commands::
+
+    :Vst fold1
+    :Vst fold2
+    :Vst fold3
+    :Vst fold4
+    :Vst fold5
+    
+Will create one level of folds down to this level of headers. This is can be
+useful for visualization of table of contents and faster navigation by big
+structures of text.
+
 Folding by directive
 ````````````````````
 
@@ -395,10 +421,8 @@ For easier finding of some directives user can use special case of folding::
 
     :Vst f{directive}
 
-Where ``{directive}`` can be name of one of directives: container, blockquote,
-image, figure, tip, note, sidebar, compound, warning, admonition, topic, table
-(not supported by |VST| at the moment but may be useful for reST users), etc.
-Directive name is case insensitive.
+Where ``{directive}`` is name of directive, eg.: container, blockquote,
+image, figure, tip, note, etc. Directive name is case insensitive.
 
 Special case is::
 
@@ -421,8 +445,7 @@ This command will preprocess file and include in file all including commands::
 
     :Vst preproc
 
-.. Note:: Processed works for only one level. If included files are containing
-   `including commands`_ they will not be processed.
+This command is recursive. For details see `including commands`_
 
 Ornament mapping
 ````````````````
@@ -460,7 +483,7 @@ Set of Vim settings which can be useful for editing of |VST| files::
 Syntax highlighting
 ~~~~~~~~~~~~~~~~~~~
 
-Structure of document will be more visible with syntax hightlighting. It is
+Structure of document will be more visible with syntax highlighting. It is
 possible to use Vim default syntax highlighting file by Nicolai Weibull just
 by issuing Vim command::
 
@@ -2319,7 +2342,7 @@ activity.
 - **Content**: NONE
 
 .. Note:: To avoid endless loops level of recursiveness is equal to Vim's
-   option 'maxfuncdepth' (default: 100).
+   option 'maxfuncdepth'/2 (default: 50).
 
 .. _reST substitutes:
    http://docutils.sf.net/docs/ref/rst/substitutions.html#character-entity-sets
@@ -2452,14 +2475,34 @@ Results in:
 Container
 ~~~~~~~~~
 
-General block directive. HTML only::
+General block directive::
 
-    .. container:: <class>
+    .. container:: classname
 
 - **Argument**: class name, may use any character, string will be parsed to
   eliminate them
 - **Options**: NONE
 - **Content**: Interpreted as body elements
+  
+HTML output::
+
+    <div class="classname"> content of container </div>
+    
+LaTeX output::
+
+    \vstclassname{ content of container }
+    
+Note ``vst`` prefix to avoid possible conflicts with built-in (La)TeX
+commands. In preamble will be inserted simple template to allow compilation of
+document without stopping on unknown commands::
+
+    \newcommand{\vstclassname}[1]{#1}
+    
+It will be inserted before declaration of extension of preamble by `external
+file`__. If user wants to declare there these new commands he should
+use ``renewcommand`` LaTeX command.
+
+__ lvtp_
 
 Compound
 ~~~~~~~~
@@ -2712,7 +2755,7 @@ bigger indentation.
    ``g:colors_name`` somewhere because it will be used in such case. When you
    try to export this document on your system check example below with manxome
    colorscheme which is not included in default Vim distribution.
-
+   
 2html examples
 ``````````````
 
@@ -2800,7 +2843,7 @@ is added ``myhtmlvst.vim`` file with examples of two macros:
    
    .. Warning:: This macro can have serious security consequences!!!
 
-These two macros are linewise and must be kept in separate lines with
+These two macros are line wise and must be kept in separate lines with
 nothing around them.
 
 Macro file is executed with help of `g:vst_html_post variable`__.
@@ -2906,20 +2949,36 @@ Full ChangeLog is here: `vst-changelog`_.
 
 Changes from last announcement:
 
-- 23 Jul 2006 - **1.1** announcement
+- 13 Oct 2006 - **1.2** announcement
   
-  - ADD: <C-B>o auxiliary mapping for ornaments
-  - ADD: section numbers in fold auxiliary command
-  - ADD: section numbers in toc auxiliary command
-  - ADD: [LaTeX] raw directive accepts tex, not only latex argument
-  - CHG: don't look for including commands in auxiliary commands - massive
-    speed gains
-  - CHG: [LaTeX] change default font size for 12pt
-  - FIX: [HTML] all styles from multiple 2html directives are in <head>
-  - FIX: [HTML] @ in 2html directive was breaking syntax highlighting
-  - FIX: [HTML] restore validity of generated documents
-  - FIX: [LaTeX] bug with _ in filenames in raw latex file option
-  - FIX: many minor bugs
+  - ADD: show number of directive line and percentage position in file for
+    easier navigation when folding by directive
+  - ADD: proper encryption of URIs (amp, percentage)
+  - ADD: make preproc auxiliary command recursive
+  - ADD: fold according to level of headers: fold1, fold2, etc.
+  - ADD: recursive folding: foldr
+  - ADD: [LaTeX] containers as ghost commands
+  - ADD: [LaTeX] Generator line (debug purposes)
+  - CHG: make folding by directive more flexible
+  - CHG: improve layout of fold texts with centered titles
+  - CHG: improve layout of text table of contents with centered titles
+  - CHG: level of recursiveness is now &maxfuncdepth/2 (50 should be enough
+    for everybody!)
+  - CHG: [HTML] when source are lists starting from no-one use transitional
+    doctype, otherwise strict
+  - CHG: [HTML] "Downgrade" to HTML 4.01 (no sense to use XHTML doctype when
+    using content text/html)
+  - FIX: length of ornaments inserted with <C-B>o
+  - FIX: show output of auxiliary commands depending on table
+  - FIX: presence of apostrophes in section titles could cause problems in folding
+  - FIX: internal links in fancy formatted text could be broken
+  - FIX: unnecessary creation of targets from links broken in several lines
+  - FIX: minor fixes in docs
+  - FIX: optimizations, 10-15% speed gains
+  - FIX: [LaTeX] too much whitespace at the end of footnotes
+  - FIX: [LaTeX] internal links work again
+  - FIX: [S5] uploaded CSS files for web page to make presentation work (sorry
+    George!)
   
 - REMEMBER ABOUT UPDATING DOCS
 
@@ -2931,12 +2990,11 @@ can be done in the future.
 
 reST compatibility things are in `compatibility table`_ with (td) note.
 
-- container as ghost environment in LaTeX export? (as custom roles)
-- section numbers in toc
-- image inside of admonition in LaTeX export
+- rotation of ornaments in titles
+- option for XHTML doctype with proper content?
+- image inside of admonition in LaTeX export (minipage conflicts...)
 - show worded reference as label
 - (doc) Quick start table
-- in VST_IdMaker full percentage encryption or - simplification
 - start description of option in next line if option name too long
 - fix _top in CSS (IE...)
 
