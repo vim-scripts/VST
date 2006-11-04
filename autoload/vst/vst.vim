@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 31 Oct 2006
-" Version: 1.3
+" Last Change: 4 Nov 2006
+" Version: 1.4
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "
@@ -37,7 +37,7 @@ scriptencoding iso-8859-2
 " Initiate some variables. Not really necessary but makes possible to use
 " command line completion when doing temporary modifications.
 " VST version (for debugging:
-let s:vst_ver = '130'
+let s:vst_ver = '140'
 " Write export immediately
 if !exists("g:vst_write_export")
 	let g:vst_write_export = 0
@@ -2717,7 +2717,7 @@ function! VST_DictTable(db, key, value, sort)
 				if valmargin - strlen(key) < 1
 					let table .= key."\n".repeat(' ', valmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				else
-					let table .= key.repeat(' ', itemmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
+					let table .= key.repeat(' ', valmargin - strlen(key)).substitute(dict[key], '\n', ' ', 'g')."\n"
 				endif
 			endif
 		endfor
@@ -2727,7 +2727,7 @@ function! VST_DictTable(db, key, value, sort)
 				if valmargin - strlen(key) < 1
 					let table .= key."\n".repeat(' ', valmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
 				else
-					let table .= key.repeat(' ', itemmargin).substitute(dict[key], '\n', ' ', 'g')."\n"
+					let table .= key.repeat(' ', valmargin - strlen(key)).substitute(dict[key], '\n', ' ', 'g')."\n"
 				endif
 			endif
 		endfor
@@ -3330,7 +3330,7 @@ function! VST_Hyperlink(text)
 					while href =~ '_\s*$'
 						" If ends in _ it is probably indirect link, process it
 						" We need to remove _ from the end to get proper key name.
-						let shref = matchstr(href, '^\s*\(`\?\)\zs.*\ze\1_\s*$')
+						let shref = tolower(matchstr(href, '^\s*\(`\?\)\zs.*\ze\1_\s*$'))
 						if has_key(g:vst_hlinkdb, shref) && g:vst_hlinkdb[shref] != ''
 							let href = escape(g:vst_hlinkdb[shref], '&\~')
 						else
@@ -4426,9 +4426,6 @@ endfunction
 			  return out
 			endfunc " }}}
 			let uri = a:uri
-			if uri =~ '&'
-				let uri = substitute(uri, '&', '&amp;', 'g')
-			endif
 			if uri =~ '^#'
 				return uri
 			endif

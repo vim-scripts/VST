@@ -1,8 +1,8 @@
 " Vim reStructured Text
 " (c) Mikolaj Machowski 2006
 " Author: Mikolaj Machowski ( mikmach AT wp DOT pl )
-" Last Change: 31 Oct 2006
-" Version: 1.3
+" Last Change: 4 Nov 2006
+" Version: 1.4
 " License:
 "  Copyright (C) 2006 Mikolaj Machowski <mikmach@wp.pl>
 "

@@ -4,9 +4,9 @@ Vim reStructured Text
 :Author: Mikolaj Machowski
 :Title: Vim reStructured Text - HTML and LaTeX output
 :Keywords: Vim, LaTeX, PDF, HTML, XML
-:Version: 1.3
+:Version: 1.4
 :License: GPL v. 2
-:Date: 31 Oct 2006
+:Date: 4 Nov 2006
 
 For a long time Vim_ users were asking for "real" export to HTML.  This is,
 I believe, first real try to achieve this effect.  This is Vim version of
@@ -2502,7 +2502,7 @@ It will be inserted before declaration of extension of preamble by `external
 file`__. If user wants to declare there these new commands he should
 use ``renewcommand`` LaTeX command.
 
-__ lvtp_
+__ vtp_
 
 Compound
 ~~~~~~~~
@@ -2949,36 +2949,12 @@ Full ChangeLog is here: `vst-changelog`_.
 
 Changes from last announcement:
 
-- 13 Oct 2006 - **1.2** announcement
+- 31 Oct 2006 - **1.3** announcement
   
-  - ADD: show number of directive line and percentage position in file for
-    easier navigation when folding by directive
-  - ADD: proper encryption of URIs (amp, percentage)
-  - ADD: make preproc auxiliary command recursive
-  - ADD: fold according to level of headers: fold1, fold2, etc.
-  - ADD: recursive folding: foldr
-  - ADD: [LaTeX] containers as ghost commands
-  - ADD: [LaTeX] Generator line (debug purposes)
-  - CHG: make folding by directive more flexible
-  - CHG: improve layout of fold texts with centered titles
-  - CHG: improve layout of text table of contents with centered titles
-  - CHG: level of recursiveness is now &maxfuncdepth/2 (50 should be enough
-    for everybody!)
-  - CHG: [HTML] when source are lists starting from no-one use transitional
-    doctype, otherwise strict
-  - CHG: [HTML] "Downgrade" to HTML 4.01 (no sense to use XHTML doctype when
-    using content text/html)
-  - FIX: length of ornaments inserted with <C-B>o
-  - FIX: show output of auxiliary commands depending on table
-  - FIX: presence of apostrophes in section titles could cause problems in folding
-  - FIX: internal links in fancy formatted text could be broken
-  - FIX: unnecessary creation of targets from links broken in several lines
-  - FIX: minor fixes in docs
-  - FIX: optimizations, 10-15% speed gains
-  - FIX: [LaTeX] too much whitespace at the end of footnotes
-  - FIX: [LaTeX] internal links work again
-  - FIX: [S5] uploaded CSS files for web page to make presentation work (sorry
-    George!)
+  - FIX: Vst link broken
+  - FIX: & in URLs double encoded
+  - FIX: broken chained links with uppercase letters
+  
   
 - REMEMBER ABOUT UPDATING DOCS
 
